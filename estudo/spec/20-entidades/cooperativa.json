@@ -1,0 +1,16 @@
+{
+  "id": "EN-cooperativa", "nome": "Cooperativa", "tabela": "cooperatives", "tipo_ts": "Cooperative",
+  "descricao": "A organização. É o tenant: todo dado de negócio pertence a uma cooperativa.",
+  "status": "proposto", "origem": { "tipo": "complemento", "ref": "repo: session.user.cooperativeId; DEC-005" },
+  "refs": { "decisoes": ["DEC-005"], "entidades": ["EN-parametros-rateio", "EN-usuario"], "politicas": ["PL-001"] },
+  "campos": [
+    { "nome": "id", "tipo": "TP-Id", "pk": true },
+    { "nome": "legal_name", "tipo": "TP-Texto", "descricao": "Razão social", "obrigatorio": true },
+    { "nome": "trade_name", "tipo": "TP-Texto", "descricao": "Nome fantasia", "obrigatorio": false },
+    { "nome": "cnpj", "tipo": "string", "regex": "^[0-9]{14}$", "unico": true, "obrigatorio": false },
+    { "nome": "timezone", "tipo": "string", "padrao": "America/Sao_Paulo" },
+    { "nome": "created_at", "tipo": "TP-Timestamp" }
+  ],
+  "invariantes": ["Toda tabela de negócio tem cooperative_id NOT NULL com FK aqui e índice composto (cooperative_id, ...)."],
+  "ciclo_de_vida": "Criada por seed/onboarding. Não se apaga."
+}

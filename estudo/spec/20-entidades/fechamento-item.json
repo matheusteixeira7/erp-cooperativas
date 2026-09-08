@@ -1,0 +1,19 @@
+{
+  "id": "EN-fechamento-item", "nome": "Demonstrativo individual", "tabela": "payout_items", "tipo_ts": "PayoutItem",
+  "descricao": "Linha de um cooperado num fechamento. O pdf não persistia isso: só mostrava na tela. Sem essa tabela o extrato do cooperado não existe depois.",
+  "status": "proposto", "origem": { "tipo": "complemento", "ref": "pdf p.5 detalhamentoCooperados só em memória" },
+  "refs": { "tipos": ["TP-DinheiroBRL"], "entidades": ["EN-fechamento", "EN-cooperado", "EN-vale"], "regras": ["RN-002", "RN-009", "RN-025"], "api": ["API-payouts-byId", "API-payouts-memberStatement"], "telas": ["UI-fechamento", "UI-extrato-cooperado"] },
+  "campos": [
+    { "nome": "id", "tipo": "TP-Id", "pk": true },
+    { "nome": "payout_id", "tipo": "TP-Id", "fk": "EN-fechamento", "obrigatorio": true, "on_delete": "cascade" },
+    { "nome": "member_id", "tipo": "TP-Id", "fk": "EN-cooperado", "obrigatorio": true },
+    { "nome": "member_name_snapshot", "tipo": "TP-Texto", "descricao": "Nome na data do fechamento." },
+    { "nome": "worked_days", "tipo": "integer", "obrigatorio": true },
+    { "nome": "gross_amount", "tipo": "TP-DinheiroBRL", "descricao": "worked_days × day_value" },
+    { "nome": "deductions_amount", "tipo": "TP-DinheiroBRL", "descricao": "Σ vales pendentes da competência" },
+    { "nome": "net_amount", "tipo": "TP-DinheiroBRL", "descricao": "max(0, gross − deductions)" },
+    { "nome": "carry_over_debt", "tipo": "TP-DinheiroBRL", "descricao": "max(0, deductions − gross) quando política = carry_over (RN-009)" },
+    { "nome": "paid_at", "tipo": "TP-Timestamp", "obrigatorio": false, "descricao": "Quando o gestor marcou como pago (PIX feito).", "origem": "complemento" }
+  ],
+  "indices": ["UNIQUE (payout_id, member_id)"]
+}

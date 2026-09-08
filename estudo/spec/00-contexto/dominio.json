@@ -1,0 +1,62 @@
+{
+  "id": "DOM-001",
+  "nome": "Cooperativa de trabalho de materiais recicláveis",
+  "descricao": "Cooperados triam material reciclável num galpão. O material é prensado em fardos e vendido para indústrias. No fim do mês, o que sobra (vendas menos despesas, menos fundos legais) é dividido entre os cooperados proporcionalmente aos dias que cada um trabalhou.",
+  "status": "confirmado",
+  "origem": { "tipo": "pdf", "ref": "p.1-3" },
+  "refs": { "regras": ["RN-001", "RN-002", "RN-010"], "fluxos": ["FL-001", "FL-007"] },
+
+  "atores": [
+    { "id": "gestor", "nome": "Gestor / administração", "descricao": "Fecha o mês, cadastra cooperados, configura percentuais, vê tudo.", "dispositivo": "desktop/notebook" },
+    { "id": "operador", "nome": "Operador do galpão", "descricao": "Faz a chamada, lança vendas, despesas e vales. Usa celular ou tablet no galpão.", "dispositivo": "celular/tablet" },
+    { "id": "cooperado", "nome": "Cooperado", "descricao": "Vê o próprio extrato: dias, bruto, vales, líquido.", "dispositivo": "celular" },
+    { "id": "contador", "nome": "Contador (externo)", "descricao": "Recebe o demonstrativo do fechamento. Não usa o sistema na v1.", "dispositivo": "-" }
+  ],
+
+  "modelo_rateio": {
+    "escolhido": "dias-trabalhados",
+    "descricao": "Todos ganham proporcional ao tempo presente. Não há peso por produção individual.",
+    "alternativas_descartadas": ["producao-individual", "misto"],
+    "origem": { "tipo": "pdf", "ref": "p.3 'Dias Trabalhados'" }
+  },
+
+  "escopo": {
+    "v1": [
+      "Cadastro de cooperados",
+      "Chamada diária de presença",
+      "Lançamento de vendas de fardos (comprador, itens, peso, preço)",
+      "Lançamento de despesas operacionais",
+      "Lançamento de vales/adiantamentos",
+      "Parâmetros de rateio (percentuais de fundos)",
+      "Simulação e fechamento mensal do rateio",
+      "Histórico de fechamentos e extrato por cooperado",
+      "Login com perfis (gestor, operador, cooperado)",
+      "Auditoria de lançamentos"
+    ],
+    "fase_2": [
+      { "modulo": "Entrada e pesagem", "descricao": "Cadastro de geradores/fornecedores, ticket de pesagem de entrada (bruto, tara, líquido), origem (doado, comprado, contrato público).", "origem": { "tipo": "pdf", "ref": "p.2 Módulo 1" } },
+      { "modulo": "Triagem e produção", "descricao": "Registro por turno/mesa, apontamento de fardos/lotes, controle de rejeito para aterro.", "origem": { "tipo": "pdf", "ref": "p.2 Módulo 2" } },
+      { "modulo": "Estoque e comercialização", "descricao": "Saldo de fardos por tipo, tabela de preços por comprador, pedidos de venda e expedição.", "origem": { "tipo": "pdf", "ref": "p.2 Módulo 3" } },
+      { "modulo": "Fiscal", "descricao": "Emissão de nota fiscal na venda.", "origem": { "tipo": "pdf", "ref": "p.1 citado" } },
+      { "modulo": "Modelos alternativos de rateio", "descricao": "Por produção ou misto, parametrizável.", "origem": { "tipo": "pdf", "ref": "p.3 opções 2 e 3" } }
+    ],
+    "fora_de_escopo": [
+      "Contabilidade oficial e SPED",
+      "Folha de pagamento CLT (cooperados não são empregados)",
+      "Integração com balança por hardware (v1 digita o peso)"
+    ]
+  },
+
+  "base_legal": [
+    { "id": "LEI-5764-71", "nome": "Lei 5.764/1971 (Lei das Cooperativas)", "artigos_relevantes": ["art. 28 (Reserva Legal mín. 10%, FATES mín. 5%)", "art. 4 (retorno das sobras proporcional às operações)"], "status": "confirmado", "impacto": ["RN-010"] },
+    { "id": "LEI-12690-12", "nome": "Lei 12.690/2012 (Cooperativas de Trabalho)", "artigos_relevantes": ["art. 7 (retirada não inferior ao piso, jornada, repouso)"], "status": "pergunta-aberta", "pergunta": "Confirmar com contador se a cooperativa está enquadrada e se há retirada mínima a garantir no rateio.", "impacto": ["RN-024"] },
+    { "id": "LGPD", "nome": "Lei 13.709/2018 (LGPD)", "artigos_relevantes": ["dados pessoais: CPF, chave PIX, presença"], "status": "confirmado", "impacto": ["PL-005", "NF-006"] }
+  ],
+
+  "premissas": [
+    "Um cooperado trabalha no máximo 1 dia por data (meio período conta como dia inteiro).",
+    "Competência mensal: vendas e despesas entram pela data do lançamento, não pela data do recebimento/pagamento.",
+    "Valores em reais, 2 casas decimais. Peso em kg.",
+    "Fuso horário America/Sao_Paulo."
+  ]
+}

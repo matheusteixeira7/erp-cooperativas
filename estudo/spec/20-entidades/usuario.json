@@ -1,0 +1,19 @@
+{
+  "id": "EN-usuario", "nome": "Usuário", "tabela": "users", "tipo_ts": "User",
+  "descricao": "Quem faz login. Pode estar ligado a um cooperado (perfil member) ou não (gestor externo).",
+  "status": "proposto", "origem": { "tipo": "complemento", "ref": "pdf não tem auth; repo tem Session.user {id, cooperativeId, roles[]}" },
+  "refs": { "tipos": ["TP-Perfil", "TP-Email"], "entidades": ["EN-cooperativa", "EN-cooperado"], "politicas": ["PL-001"], "api": ["API-auth-session"], "telas": ["UI-login"] },
+  "campos": [
+    { "nome": "id", "tipo": "TP-Id", "pk": true },
+    { "nome": "cooperative_id", "tipo": "TP-Id", "fk": "EN-cooperativa", "obrigatorio": true },
+    { "nome": "email", "tipo": "TP-Email", "unico": true, "obrigatorio": true },
+    { "nome": "name", "tipo": "TP-Texto", "obrigatorio": true },
+    { "nome": "roles", "tipo": "TP-Perfil[]", "obrigatorio": true, "descricao": "Pelo menos 1." },
+    { "nome": "member_id", "tipo": "TP-Id", "fk": "EN-cooperado", "obrigatorio": false, "descricao": "Preenchido quando o usuário é um cooperado." },
+    { "nome": "password_hash", "tipo": "string", "obrigatorio": true, "descricao": "argon2id. Nunca sai da API." },
+    { "nome": "active", "tipo": "boolean", "padrao": true },
+    { "nome": "created_at", "tipo": "TP-Timestamp" }
+  ],
+  "invariantes": ["roles contém 'member' ⇒ member_id não nulo.", "email único por sistema (não por cooperativa)."],
+  "pergunta_aberta": "Auth própria (credenciais + cookie de sessão) ou provedor (Auth.js, Clerk)? Recomendo Auth.js com credenciais, mantendo createTRPCContext como único ponto que lê cookie."
+}

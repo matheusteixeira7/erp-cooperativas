@@ -1,0 +1,22 @@
+{
+  "id": "EN-vale", "nome": "Vale / Adiantamento", "tabela": "advances", "tipo_ts": "Advance",
+  "descricao": "Desconto individual de um cooperado, abatido do bruto no fechamento.",
+  "status": "confirmado", "origem": { "tipo": "pdf", "ref": "p.4 CREATE TABLE adiantamentos_descontos" },
+  "refs": { "tipos": ["TP-DinheiroBRL", "TP-DataLocal", "TP-StatusVale", "TP-TipoVale"], "entidades": ["EN-cooperativa", "EN-cooperado", "EN-fechamento"], "regras": ["RN-002", "RN-008", "RN-009", "RN-011", "RN-021"], "validacoes": ["VL-005", "VL-006"], "api": ["API-advances-create", "API-advances-list", "API-advances-cancel"], "telas": ["UI-financeiro"] },
+  "campos": [
+    { "nome": "id", "tipo": "TP-Id", "pk": true },
+    { "nome": "cooperative_id", "tipo": "TP-Id", "fk": "EN-cooperativa", "obrigatorio": true },
+    { "nome": "member_id", "tipo": "TP-Id", "fk": "EN-cooperado", "obrigatorio": true },
+    { "nome": "kind", "tipo": "TP-TipoVale", "obrigatorio": true, "padrao": "cash_advance" },
+    { "nome": "description", "tipo": "TP-Texto", "obrigatorio": true },
+    { "nome": "amount", "tipo": "TP-DinheiroBRL", "obrigatorio": true },
+    { "nome": "granted_on", "tipo": "TP-DataLocal", "obrigatorio": true, "pdf": "data_registro", "descricao": "Define a competência em que será descontado." },
+    { "nome": "status", "tipo": "TP-StatusVale", "obrigatorio": true, "padrao": "pending", "pdf": "pago_ou_descontado BOOLEAN" },
+    { "nome": "deducted_in_payout_id", "tipo": "TP-Id", "fk": "EN-fechamento", "obrigatorio": false, "descricao": "Qual fechamento descontou." },
+    { "nome": "origin_advance_id", "tipo": "TP-Id", "fk": "EN-vale", "obrigatorio": false, "descricao": "Quando kind = carry_over, aponta o vale original (RN-009)." },
+    { "nome": "created_by", "tipo": "TP-Id", "fk": "EN-usuario" },
+    { "nome": "created_at", "tipo": "TP-Timestamp" }, { "nome": "updated_at", "tipo": "TP-Timestamp" }
+  ],
+  "indices": ["INDEX (cooperative_id, member_id, status)", "INDEX (cooperative_id, granted_on)"],
+  "ciclo_de_vida": "pending → deducted (no fechamento, RN-008) | pending → cancelled (RN-021). deducted é final."
+}

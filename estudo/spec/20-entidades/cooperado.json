@@ -1,0 +1,21 @@
+{
+  "id": "EN-cooperado", "nome": "Cooperado", "tabela": "members", "tipo_ts": "Member",
+  "descricao": "Pessoa associada que trabalha e participa do rateio.",
+  "status": "confirmado", "origem": { "tipo": "pdf", "ref": "p.3 CREATE TABLE cooperados" },
+  "refs": { "tipos": ["TP-CPF", "TP-ChavePix", "TP-DataLocal"], "entidades": ["EN-cooperativa", "EN-presenca", "EN-vale", "EN-fechamento-item"], "regras": ["RN-007"], "validacoes": ["VL-001", "VL-007", "VL-008", "VL-012"], "api": ["API-members-list", "API-members-create", "API-members-update", "API-members-deactivate"], "telas": ["UI-cooperados"] },
+  "campos": [
+    { "nome": "id", "tipo": "TP-Id", "pk": true },
+    { "nome": "cooperative_id", "tipo": "TP-Id", "fk": "EN-cooperativa", "obrigatorio": true },
+    { "nome": "name", "tipo": "TP-Texto", "obrigatorio": true, "pdf": "nome VARCHAR(100)" },
+    { "nome": "cpf", "tipo": "TP-CPF", "obrigatorio": true, "unico_por": "cooperative_id", "pdf": "cpf VARCHAR(14) UNIQUE" },
+    { "nome": "pix_key", "tipo": "TP-ChavePix", "obrigatorio": false, "pdf": "chave_pix" },
+    { "nome": "phone", "tipo": "string", "obrigatorio": false, "origem": "complemento" },
+    { "nome": "admitted_on", "tipo": "TP-DataLocal", "obrigatorio": true, "padrao": "hoje", "pdf": "data_admissao" },
+    { "nome": "left_on", "tipo": "TP-DataLocal", "obrigatorio": false, "descricao": "Data de desligamento. Substitui o boolean 'ativo' do pdf: ativo = left_on IS NULL.", "origem": "complemento" },
+    { "nome": "notes", "tipo": "text", "obrigatorio": false },
+    { "nome": "created_at", "tipo": "TP-Timestamp" }, { "nome": "updated_at", "tipo": "TP-Timestamp" }
+  ],
+  "indices": ["UNIQUE (cooperative_id, cpf)", "INDEX (cooperative_id, left_on)"],
+  "invariantes": ["left_on ≥ admitted_on.", "Não se apaga cooperado com presenças ou vales: desliga (left_on)."],
+  "ciclo_de_vida": "ativo (left_on null) → desligado (left_on preenchido). Reativação = novo registro ou limpar left_on (decisão do gestor, auditada)."
+}

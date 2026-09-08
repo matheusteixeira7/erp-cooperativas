@@ -1,0 +1,31 @@
+{
+  "id": "EN-fechamento", "nome": "Fechamento do rateio", "tabela": "payouts", "tipo_ts": "Payout",
+  "descricao": "Snapshot oficial do rateio de um mês. Guarda os totais e os parâmetros usados. Os valores por cooperado ficam em payout_items.",
+  "status": "confirmado", "origem": { "tipo": "pdf", "ref": "p.4 CREATE TABLE fechamento_rateio" },
+  "refs": { "tipos": ["TP-MesAno", "TP-DinheiroBRL", "TP-StatusFechamento", "TP-Timestamp"], "entidades": ["EN-cooperativa", "EN-fechamento-item", "EN-parametros-rateio", "EN-vale"], "regras": ["RN-001", "RN-003", "RN-004", "RN-006", "RN-010", "RN-011", "RN-012", "RN-017", "RN-018", "RN-019", "RN-025"], "fluxos": ["FL-001"], "api": ["API-payouts-simulate", "API-payouts-close", "API-payouts-list", "API-payouts-byId", "API-payouts-reopen"], "telas": ["UI-fechamento", "UI-historico-fechamentos"] },
+  "campos": [
+    { "nome": "id", "tipo": "TP-Id", "pk": true },
+    { "nome": "cooperative_id", "tipo": "TP-Id", "fk": "EN-cooperativa", "obrigatorio": true },
+    { "nome": "period", "tipo": "TP-MesAno", "obrigatorio": true, "pdf": "mes INT, ano INT" },
+    { "nome": "status", "tipo": "TP-StatusFechamento", "obrigatorio": true, "padrao": "closed" },
+    { "nome": "gross_revenue", "tipo": "TP-DinheiroBRL", "pdf": "receita_bruta" },
+    { "nome": "total_expenses", "tipo": "TP-DinheiroBRL", "pdf": "despesas_totais" },
+    { "nome": "surplus", "tipo": "TP-DinheiroBRL", "pdf": "sobra_liquida", "descricao": "gross_revenue − total_expenses" },
+    { "nome": "legal_reserve_amount", "tipo": "TP-DinheiroBRL", "origem": "complemento (DEC-002)" },
+    { "nome": "fates_amount", "tipo": "TP-DinheiroBRL", "origem": "complemento (DEC-002)" },
+    { "nome": "other_funds_amount", "tipo": "TP-DinheiroBRL", "origem": "complemento (DEC-002)" },
+    { "nome": "distributable_surplus", "tipo": "TP-DinheiroBRL", "descricao": "surplus − fundos (RN-010)" },
+    { "nome": "total_worked_days", "tipo": "integer", "pdf": "total_dias_trabalhados_geral" },
+    { "nome": "day_value", "tipo": "TP-DinheiroBRL", "pdf": "valor_por_dia", "descricao": "floor(distributable_surplus / total_worked_days, 2) (RN-012)" },
+    { "nome": "distributed_total", "tipo": "TP-DinheiroBRL", "descricao": "Σ items.gross_amount" },
+    { "nome": "rounding_residual", "tipo": "TP-DinheiroBRL", "descricao": "distributable_surplus − distributed_total. Fica para a cooperativa (RN-012)." },
+    { "nome": "settings_snapshot", "tipo": "jsonb", "descricao": "Cópia dos parâmetros usados (percentuais, políticas)." },
+    { "nome": "closed_by", "tipo": "TP-Id", "fk": "EN-usuario" },
+    { "nome": "closed_at", "tipo": "TP-Timestamp", "pdf": "data_fechamento" },
+    { "nome": "reopened_by", "tipo": "TP-Id", "fk": "EN-usuario", "obrigatorio": false },
+    { "nome": "reopened_at", "tipo": "TP-Timestamp", "obrigatorio": false },
+    { "nome": "reopen_reason", "tipo": "text", "obrigatorio": false }
+  ],
+  "indices": ["UNIQUE (cooperative_id, period) WHERE status = 'closed'"],
+  "invariantes": ["No máximo 1 fechamento com status closed por (cooperativa, período) (RN-018).", "Registro fechado nunca é alterado; reabrir muda só status/reopen_* e libera lançamentos; novo fechamento gera novo registro (RN-025)."]
+}

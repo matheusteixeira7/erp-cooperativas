@@ -1,0 +1,19 @@
+{
+  "id": "EN-log-auditoria", "nome": "Log de auditoria", "tabela": "audit_logs", "tipo_ts": "AuditLog",
+  "descricao": "Quem fez o quê, quando, em qual registro. Append-only.",
+  "status": "proposto", "origem": { "tipo": "complemento", "ref": "PL-006" },
+  "refs": { "tipos": ["TP-AcaoAuditoria", "TP-Timestamp"], "entidades": ["EN-cooperativa", "EN-usuario"], "politicas": ["PL-006"], "nf": ["NF-006"] },
+  "campos": [
+    { "nome": "id", "tipo": "TP-Id", "pk": true },
+    { "nome": "cooperative_id", "tipo": "TP-Id", "fk": "EN-cooperativa", "obrigatorio": true },
+    { "nome": "user_id", "tipo": "TP-Id", "fk": "EN-usuario", "obrigatorio": true },
+    { "nome": "action", "tipo": "TP-AcaoAuditoria", "obrigatorio": true },
+    { "nome": "entity", "tipo": "string", "obrigatorio": true, "descricao": "Nome da tabela." },
+    { "nome": "entity_id", "tipo": "TP-Id", "obrigatorio": true },
+    { "nome": "before", "tipo": "jsonb", "obrigatorio": false },
+    { "nome": "after", "tipo": "jsonb", "obrigatorio": false },
+    { "nome": "created_at", "tipo": "TP-Timestamp" }
+  ],
+  "indices": ["INDEX (cooperative_id, entity, entity_id)", "INDEX (cooperative_id, created_at)"],
+  "invariantes": ["Sem UPDATE nem DELETE (revogar permissão no banco)."]
+}

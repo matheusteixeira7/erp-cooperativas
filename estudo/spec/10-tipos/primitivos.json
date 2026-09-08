@@ -1,113 +1,113 @@
 {
+  "descricao": "Tipos com nome. Um agente deve criar um zod schema e um tipo TS por item em packages/domain (ver estrutura-pastas).",
   "tipos": [
     {
-      "id": "TP-CPF",
-      "nome": "CPF",
-      "descricao": "Cadastro de pessoa fisica. Guardar so digitos.",
-      "base": "string",
-      "regex": "^[0-9]{11}$",
-      "validacao_extra": "digitos verificadores validos",
-      "sql": "CHAR(11)",
-      "typescript": "type CPF = string & { __brand: 'CPF' }",
-      "pii": true,
+      "id": "TP-Id", "nome": "Id", "codigo": "Id",
+      "descricao": "Identificador de registro. UUID v7 (ordenável por tempo). Gerado no servidor.",
+      "base": "string", "formato": "uuid",
+      "sql": "uuid PRIMARY KEY DEFAULT gen_random_uuid()", "zod": "z.uuid()",
       "status": "proposto",
-      "origem": { "tipo": "complemento", "ref": "pdf usa VARCHAR(14) sem validar" },
-      "refs": { "entidades": ["EN-cooperado"], "regras": ["VL-001"] }
+      "origem": { "tipo": "complemento", "ref": "pdf usa SERIAL; docs/trpc.md usa z.string().uuid(); UUID facilita multi-tenant e uso offline" },
+      "refs": { "decisoes": ["DEC-005"] }
     },
     {
-      "id": "TP-DinheiroBRL",
-      "nome": "DinheiroBRL",
-      "descricao": "Valor em reais. Nunca usar float. Guardar em centavos inteiros OU numeric(12,2).",
-      "base": "decimal",
-      "escala": 2,
-      "minimo": 0,
-      "sql": "NUMERIC(12,2)",
-      "typescript": "type DinheiroBRL = number /* centavos inteiros */",
-      "arredondamento": "half-even, 2 casas",
-      "status": "proposto",
-      "origem": { "tipo": "complemento", "ref": "pdf usa NUMERIC(10,2) e parseFloat" },
-      "refs": { "entidades": ["EN-venda", "EN-item-venda", "EN-despesa", "EN-vale", "EN-fechamento"], "regras": ["RN-001", "RN-002"] }
+      "id": "TP-CPF", "nome": "CPF", "codigo": "Cpf",
+      "descricao": "Cadastro de pessoa física. Guardar só os 11 dígitos. Exibir mascarado (***.456.789-**) fora do perfil gestor.",
+      "base": "string", "regex": "^[0-9]{11}$", "validacao_extra": "dígitos verificadores válidos; rejeitar sequências repetidas (00000000000)",
+      "sql": "char(11)", "zod": "z.string().regex(/^\\d{11}$/).refine(isValidCpf)",
+      "pii": true, "status": "proposto",
+      "origem": { "tipo": "complemento", "ref": "pdf usa VARCHAR(14) sem validar (p.3)" },
+      "refs": { "entidades": ["EN-cooperado"], "validacoes": ["VL-001"], "politicas": ["PL-005"] }
     },
     {
-      "id": "TP-PesoKg",
-      "nome": "PesoKg",
-      "descricao": "Peso em quilogramas, positivo.",
-      "base": "decimal",
-      "escala": 2,
-      "minimo_exclusivo": 0,
-      "sql": "NUMERIC(10,2) CHECK (valor > 0)",
+      "id": "TP-DinheiroBRL", "nome": "DinheiroBRL", "codigo": "MoneyBrl",
+      "descricao": "Valor em reais. Nunca float. No banco numeric(12,2); no código, inteiro em centavos ou decimal.js. Arredondamento half-even quando não especificado.",
+      "base": "decimal", "escala": 2, "minimo": 0,
+      "sql": "numeric(12,2) NOT NULL", "zod": "z.number().multipleOf(0.01).nonnegative()",
       "status": "proposto",
-      "origem": { "tipo": "complemento", "ref": "pdf p.3 itens_venda.peso_kg" },
-      "refs": { "entidades": ["EN-item-venda"], "regras": ["VL-002"] }
+      "origem": { "tipo": "complemento", "ref": "pdf usa NUMERIC(10,2) e parseFloat (p.4)" },
+      "refs": { "entidades": ["EN-venda", "EN-item-venda", "EN-despesa", "EN-vale", "EN-fechamento", "EN-fechamento-item"], "regras": ["RN-001", "RN-002", "RN-012"] }
     },
     {
-      "id": "TP-PrecoPorKg",
-      "nome": "PrecoPorKg",
-      "descricao": "Preco unitario em reais por kg.",
-      "base": "decimal",
-      "escala": 4,
-      "minimo_exclusivo": 0,
-      "sql": "NUMERIC(10,4)",
+      "id": "TP-PesoKg", "nome": "PesoKg", "codigo": "WeightKg",
+      "descricao": "Peso em quilogramas, maior que zero.",
+      "base": "decimal", "escala": 2, "minimo_exclusivo": 0,
+      "sql": "numeric(10,2) NOT NULL CHECK (weight_kg > 0)", "zod": "z.number().positive().multipleOf(0.01)",
       "status": "proposto",
-      "origem": { "tipo": "complemento", "ref": "pdf p.3 usa NUMERIC(10,2); 4 casas evita perda em R$ 0,65/kg x toneladas" },
-      "refs": { "entidades": ["EN-item-venda"] }
+      "origem": { "tipo": "pdf", "ref": "p.3 itens_venda.peso_kg" },
+      "refs": { "entidades": ["EN-item-venda"], "validacoes": ["VL-002"] }
     },
     {
-      "id": "TP-Percentual",
-      "nome": "Percentual",
-      "descricao": "Fracao entre 0 e 1 (0.10 = 10%).",
-      "base": "decimal",
-      "escala": 4,
-      "minimo": 0,
-      "maximo": 1,
+      "id": "TP-PrecoPorKg", "nome": "PrecoPorKg", "codigo": "PricePerKg",
+      "descricao": "Preço unitário em R$/kg. 4 casas para não perder centavos em toneladas a R$ 0,65/kg.",
+      "base": "decimal", "escala": 4, "minimo_exclusivo": 0,
+      "sql": "numeric(10,4) NOT NULL", "zod": "z.number().positive()",
       "status": "proposto",
-      "origem": { "tipo": "complemento", "ref": "necessario para fundos legais RN-010" },
-      "refs": { "regras": ["RN-010"] }
+      "origem": { "tipo": "complemento", "ref": "pdf usa NUMERIC(10,2) (p.3)" },
+      "refs": { "entidades": ["EN-item-venda"], "validacoes": ["VL-003"] }
     },
     {
-      "id": "TP-MesAno",
-      "nome": "MesAno",
-      "descricao": "Periodo de competencia mensal.",
-      "base": "string",
-      "regex": "^[0-9]{4}-(0[1-9]|1[0-2])$",
-      "exemplo": "2026-08",
-      "sql": "DATE (sempre dia 01) ou (ano INT, mes INT)",
-      "status": "proposto",
-      "origem": { "tipo": "complemento", "ref": "pdf usa mes INT + ano INT separados" },
-      "refs": { "entidades": ["EN-fechamento"], "api": ["API-rateio-simulacao", "API-rateio-fechar"] }
+      "id": "TP-Percentual", "nome": "Percentual", "codigo": "Fraction",
+      "descricao": "Fração entre 0 e 1. 0.10 = 10%. Na UI exibir como porcentagem.",
+      "base": "decimal", "escala": 4, "minimo": 0, "maximo": 1,
+      "sql": "numeric(5,4) NOT NULL", "zod": "z.number().min(0).max(1)",
+      "status": "confirmado",
+      "origem": { "tipo": "decisao", "ref": "DEC-002" },
+      "refs": { "entidades": ["EN-parametros-rateio"], "regras": ["RN-010"] }
     },
     {
-      "id": "TP-DataLocal",
-      "nome": "DataLocal",
-      "descricao": "Data sem hora, fuso America/Sao_Paulo.",
-      "base": "string",
-      "formato": "YYYY-MM-DD",
-      "sql": "DATE",
+      "id": "TP-MesAno", "nome": "MesAno", "codigo": "Period",
+      "descricao": "Competência mensal. String 'YYYY-MM'. No banco, coluna date com dia 01.",
+      "base": "string", "regex": "^[0-9]{4}-(0[1-9]|1[0-2])$", "exemplo": "2026-08",
+      "sql": "date NOT NULL  -- sempre dia 01", "zod": "z.string().regex(/^\\d{4}-(0[1-9]|1[0-2])$/)",
+      "status": "proposto",
+      "origem": { "tipo": "complemento", "ref": "pdf usa mes INT + ano INT (p.4)" },
+      "refs": { "entidades": ["EN-fechamento"], "api": ["API-payouts-simulate", "API-payouts-close"], "validacoes": ["VL-011"] }
+    },
+    {
+      "id": "TP-DataLocal", "nome": "DataLocal", "codigo": "LocalDate",
+      "descricao": "Data sem hora, fuso America/Sao_Paulo. Nunca converter via Date UTC no cliente.",
+      "base": "string", "formato": "YYYY-MM-DD",
+      "sql": "date NOT NULL", "zod": "z.iso.date()",
       "status": "confirmado",
       "origem": { "tipo": "pdf", "ref": "p.3 presencas.data, vendas.data_venda" },
-      "refs": { "entidades": ["EN-presenca", "EN-venda", "EN-despesa", "EN-vale"] }
+      "refs": { "entidades": ["EN-presenca", "EN-venda", "EN-despesa", "EN-vale"], "validacoes": ["VL-006"] }
     },
     {
-      "id": "TP-ChavePix",
-      "nome": "ChavePix",
-      "descricao": "CPF, e-mail, telefone (+55...) ou chave aleatoria (UUID).",
-      "base": "string",
-      "max": 77,
-      "pii": true,
+      "id": "TP-ChavePix", "nome": "ChavePix", "codigo": "PixKey",
+      "descricao": "CPF (11 dígitos), CNPJ (14), e-mail, telefone +55DDDNÚMERO ou chave aleatória (UUID).",
+      "base": "string", "max": 77, "pii": true,
+      "sql": "varchar(77)", "zod": "z.string().max(77)  // refinar por tipo",
       "status": "proposto",
       "origem": { "tipo": "pdf", "ref": "p.3 cooperados.chave_pix VARCHAR(100)" },
-      "refs": { "entidades": ["EN-cooperado"] }
+      "refs": { "entidades": ["EN-cooperado"], "validacoes": ["VL-012"], "politicas": ["PL-005"] }
     },
     {
-      "id": "TP-Id",
-      "nome": "Id",
-      "descricao": "Identificador de registro.",
-      "base": "integer",
-      "sql": "BIGSERIAL / IDENTITY",
-      "status": "pergunta-aberta",
-      "pergunta": "SERIAL (como no pdf) ou UUID? UUID facilita uso offline no galpao.",
-      "origem": { "tipo": "pdf", "ref": "p.3 SERIAL PRIMARY KEY" },
-      "refs": {}
+      "id": "TP-Email", "nome": "Email", "codigo": "Email",
+      "descricao": "E-mail de login.",
+      "base": "string", "max": 254,
+      "sql": "varchar(254)", "zod": "z.email()",
+      "status": "proposto",
+      "origem": { "tipo": "complemento", "ref": "auth" },
+      "refs": { "entidades": ["EN-usuario"] }
+    },
+    {
+      "id": "TP-Texto", "nome": "Texto", "codigo": "Text",
+      "descricao": "Texto curto (nomes, descrições). Aparar espaços. Vazio é inválido.",
+      "base": "string", "min": 1, "max": 200,
+      "sql": "varchar(200) NOT NULL", "zod": "z.string().trim().min(1).max(200)",
+      "status": "proposto",
+      "origem": { "tipo": "complemento", "ref": "pdf mistura VARCHAR(50/100/150)" },
+      "refs": { "entidades": ["EN-cooperado", "EN-despesa", "EN-vale", "EN-tipo-material", "EN-comprador"] }
+    },
+    {
+      "id": "TP-Timestamp", "nome": "Timestamp", "codigo": "Timestamp",
+      "descricao": "Instante com fuso. Para created_at, updated_at, closed_at.",
+      "base": "string", "formato": "ISO 8601",
+      "sql": "timestamptz NOT NULL DEFAULT now()", "zod": "z.iso.datetime()",
+      "status": "confirmado",
+      "origem": { "tipo": "pdf", "ref": "p.4 data_fechamento TIMESTAMP" },
+      "refs": { "entidades": ["EN-fechamento", "EN-log-auditoria"] }
     }
   ]
 }

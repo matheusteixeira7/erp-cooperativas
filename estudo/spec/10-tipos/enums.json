@@ -1,0 +1,63 @@
+{
+  "enums": [
+    {
+      "id": "TP-CategoriaMaterial", "nome": "CategoriaMaterial", "codigo": "material_category",
+      "descricao": "Família do material reciclável.",
+      "valores": [
+        { "codigo": "plastic", "rotulo": "Plástico" }, { "codigo": "paper", "rotulo": "Papel" },
+        { "codigo": "metal", "rotulo": "Metal" }, { "codigo": "glass", "rotulo": "Vidro" },
+        { "codigo": "waste", "rotulo": "Rejeito" }, { "codigo": "other", "rotulo": "Outros" }
+      ],
+      "status": "confirmado", "origem": { "tipo": "pdf", "ref": "p.3 tipos_material.categoria" },
+      "refs": { "entidades": ["EN-tipo-material"] }
+    },
+    {
+      "id": "TP-StatusFechamento", "nome": "StatusFechamento", "codigo": "payout_status",
+      "descricao": "Ciclo de vida do fechamento mensal.",
+      "valores": [
+        { "codigo": "open", "rotulo": "Aberto", "descricao": "Mês sem fechamento. Estado implícito: não existe registro." },
+        { "codigo": "closed", "rotulo": "Fechado", "descricao": "Rateio oficial gravado. Lançamentos do mês bloqueados." },
+        { "codigo": "reopened", "rotulo": "Reaberto", "descricao": "Gestor reabriu com motivo. Lançamentos liberados. Precisa fechar de novo." }
+      ],
+      "status": "proposto", "origem": { "tipo": "complemento", "ref": "pdf só tem 'fechado' via botão (p.10)" },
+      "refs": { "entidades": ["EN-fechamento"], "fluxos": ["FL-001"] }
+    },
+    {
+      "id": "TP-StatusVale", "nome": "StatusVale", "codigo": "advance_status",
+      "descricao": "Ciclo de vida do vale.",
+      "valores": [
+        { "codigo": "pending", "rotulo": "Pendente", "descricao": "Ainda não descontado." },
+        { "codigo": "deducted", "rotulo": "Descontado", "descricao": "Abatido em um fechamento." },
+        { "codigo": "cancelled", "rotulo": "Cancelado", "descricao": "Lançado por engano. Não conta." }
+      ],
+      "status": "proposto", "origem": { "tipo": "pdf", "ref": "p.4 pago_ou_descontado BOOLEAN; complemento: cancelado" },
+      "refs": { "entidades": ["EN-vale"], "regras": ["RN-008", "RN-021"] }
+    },
+    {
+      "id": "TP-Perfil", "nome": "Perfil", "codigo": "role",
+      "descricao": "Papel do usuário na cooperativa. Um usuário pode ter mais de um.",
+      "valores": [
+        { "codigo": "manager", "rotulo": "Gestor" }, { "codigo": "operator", "rotulo": "Operador" }, { "codigo": "member", "rotulo": "Cooperado" }
+      ],
+      "status": "proposto", "origem": { "tipo": "complemento", "ref": "pdf não tem auth; repo tem session.user.roles: string[]" },
+      "refs": { "entidades": ["EN-usuario"], "politicas": ["PL-001"] }
+    },
+    {
+      "id": "TP-TipoVale", "nome": "TipoVale", "codigo": "advance_kind",
+      "descricao": "Natureza do desconto.",
+      "valores": [
+        { "codigo": "cash_advance", "rotulo": "Adiantamento em dinheiro" }, { "codigo": "purchase", "rotulo": "Compra (EPI, mercado, farmácia)" },
+        { "codigo": "carry_over", "rotulo": "Saldo devedor de mês anterior", "descricao": "Gerado pelo sistema (RN-009)." }, { "codigo": "other", "rotulo": "Outro" }
+      ],
+      "status": "proposto", "origem": { "tipo": "pdf", "ref": "p.4 descricao livre 'Vale, Compra de EPI'" },
+      "refs": { "entidades": ["EN-vale"], "regras": ["RN-009"] }
+    },
+    {
+      "id": "TP-AcaoAuditoria", "nome": "AcaoAuditoria", "codigo": "audit_action",
+      "descricao": "O que foi feito num registro.",
+      "valores": [ { "codigo": "create" }, { "codigo": "update" }, { "codigo": "delete" }, { "codigo": "close" }, { "codigo": "reopen" }, { "codigo": "login" } ],
+      "status": "proposto", "origem": { "tipo": "complemento", "ref": "PL-006" },
+      "refs": { "entidades": ["EN-log-auditoria"] }
+    }
+  ]
+}

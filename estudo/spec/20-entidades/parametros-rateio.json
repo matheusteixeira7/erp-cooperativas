@@ -1,0 +1,20 @@
+{
+  "id": "EN-parametros-rateio", "nome": "Parâmetros de rateio", "tabela": "payout_settings", "tipo_ts": "PayoutSettings",
+  "descricao": "Percentuais de fundos e regras configuráveis, por cooperativa. Versionado: cada alteração cria uma linha nova com effective_from, para o fechamento usar o percentual vigente no mês.",
+  "status": "confirmado", "origem": { "tipo": "decisao", "ref": "DEC-002" },
+  "refs": { "tipos": ["TP-Percentual", "TP-MesAno"], "entidades": ["EN-cooperativa", "EN-fechamento"], "regras": ["RN-009", "RN-010", "RN-012"], "api": ["API-payoutSettings-get", "API-payoutSettings-update"], "telas": ["UI-parametros"], "decisoes": ["DEC-002"] },
+  "campos": [
+    { "nome": "id", "tipo": "TP-Id", "pk": true },
+    { "nome": "cooperative_id", "tipo": "TP-Id", "fk": "EN-cooperativa", "obrigatorio": true },
+    { "nome": "effective_from", "tipo": "TP-MesAno", "obrigatorio": true, "descricao": "Vale deste mês em diante." },
+    { "nome": "legal_reserve_rate", "tipo": "TP-Percentual", "obrigatorio": true, "padrao": 0.10, "minimo": 0.10, "descricao": "Reserva Legal. Mínimo legal 10%." },
+    { "nome": "fates_rate", "tipo": "TP-Percentual", "obrigatorio": true, "padrao": 0.05, "minimo": 0.05, "descricao": "FATES. Mínimo legal 5%." },
+    { "nome": "other_funds_rate", "tipo": "TP-Percentual", "obrigatorio": true, "padrao": 0, "descricao": "Outros fundos estatutários." },
+    { "nome": "negative_balance_policy", "tipo": "enum", "valores": ["forgive", "carry_over"], "padrao": "carry_over", "descricao": "O que fazer quando vale > bruto (RN-009)." },
+    { "nome": "include_members_left_in_period", "tipo": "boolean", "padrao": true, "descricao": "Cooperado desligado dentro do mês recebe pelos dias trabalhados (RN-007)." },
+    { "nome": "created_by", "tipo": "TP-Id", "fk": "EN-usuario" },
+    { "nome": "created_at", "tipo": "TP-Timestamp" }
+  ],
+  "indices": ["UNIQUE (cooperative_id, effective_from)"],
+  "invariantes": ["legal_reserve_rate + fates_rate + other_funds_rate < 1.", "Percentuais abaixo do mínimo legal são rejeitados (VL-013)."]
+}

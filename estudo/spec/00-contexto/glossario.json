@@ -1,0 +1,26 @@
+{
+  "descricao": "Linguagem ubíqua. 'termo' é como a cooperativa fala. 'codigo' é como aparece em tabela, router e tipo TS (DEC-004).",
+  "termos": [
+    { "termo": "Cooperativa", "codigo": "cooperative", "definicao": "A organização. Tenant do sistema.", "refs": { "entidades": ["EN-cooperativa"] } },
+    { "termo": "Cooperado", "codigo": "member", "definicao": "Pessoa associada que trabalha na triagem e participa do rateio. Não é empregado.", "refs": { "entidades": ["EN-cooperado"] } },
+    { "termo": "Chamada / Presença", "codigo": "attendance", "definicao": "Registro diário de quem esteve presente.", "refs": { "entidades": ["EN-presenca"], "telas": ["UI-chamada"] } },
+    { "termo": "Dia trabalhado / Diária", "codigo": "workedDay / dayValue", "definicao": "Uma presença. 'Valor da diária' é quanto vale 1 dia trabalhado no mês.", "refs": { "regras": ["RN-001"] } },
+    { "termo": "Tipo de material", "codigo": "materialType", "definicao": "PET cristal, papelão, alumínio... Categoria: plástico, papel, metal, vidro, rejeito.", "refs": { "entidades": ["EN-tipo-material"] } },
+    { "termo": "Fardo", "codigo": "bale", "definicao": "Material prensado e amarrado, pronto para venda. Na v1 aparece só como item de venda com peso.", "refs": { "entidades": ["EN-item-venda"] } },
+    { "termo": "Comprador", "codigo": "buyer", "definicao": "Indústria ou reciclador que compra os fardos.", "refs": { "entidades": ["EN-comprador"] } },
+    { "termo": "Venda", "codigo": "sale", "definicao": "Saída de material para um comprador, com itens pesados e preço por kg.", "refs": { "entidades": ["EN-venda", "EN-item-venda"] } },
+    { "termo": "Despesa operacional", "codigo": "expense", "definicao": "Custo do galpão: aluguel, energia, combustível, manutenção, aterro.", "refs": { "entidades": ["EN-despesa"] } },
+    { "termo": "Vale / Adiantamento", "codigo": "advance", "definicao": "Dinheiro adiantado ao cooperado ou custo individual (EPI, farmácia) descontado no rateio.", "refs": { "entidades": ["EN-vale"] } },
+    { "termo": "Sobra", "codigo": "surplus", "definicao": "Receita menos despesas do mês. Em cooperativa não se chama lucro.", "refs": { "regras": ["RN-003"] } },
+    { "termo": "Sobra distribuível", "codigo": "distributableSurplus", "definicao": "Sobra depois de retirar Reserva Legal e FATES.", "refs": { "regras": ["RN-010"] } },
+    { "termo": "Reserva Legal", "codigo": "legalReserve", "definicao": "Fundo obrigatório, mínimo 10% das sobras (Lei 5.764 art. 28).", "refs": { "regras": ["RN-010"] } },
+    { "termo": "FATES", "codigo": "fates", "definicao": "Fundo de Assistência Técnica, Educacional e Social. Mínimo 5% das sobras.", "refs": { "regras": ["RN-010"] } },
+    { "termo": "Rateio", "codigo": "payout", "definicao": "Divisão da sobra distribuível entre os cooperados.", "refs": { "regras": ["RN-002"] } },
+    { "termo": "Fechamento", "codigo": "payoutClosing", "definicao": "Ato de oficializar o rateio de um mês. Depois de fechado, o mês não muda.", "refs": { "entidades": ["EN-fechamento"], "fluxos": ["FL-001"] } },
+    { "termo": "Simulação", "codigo": "payoutSimulation", "definicao": "Cálculo do rateio sem gravar nada. Pode rodar quantas vezes quiser.", "refs": { "api": ["API-payouts-simulate"] } },
+    { "termo": "Demonstrativo / Extrato", "codigo": "memberStatement", "definicao": "Linha do fechamento para um cooperado: dias, bruto, descontos, líquido.", "refs": { "entidades": ["EN-fechamento-item"], "telas": ["UI-extrato-cooperado"] } },
+    { "termo": "Saldo devedor", "codigo": "carryOverDebt", "definicao": "Parte do vale que não coube no bruto do mês e passa para o mês seguinte.", "refs": { "regras": ["RN-009"] } },
+    { "termo": "Competência", "codigo": "period", "definicao": "Mês/ano a que um lançamento pertence.", "refs": { "tipos": ["TP-MesAno"] } },
+    { "termo": "Rejeito", "codigo": "waste", "definicao": "Material que não serve e vai para o aterro. Fase 2.", "refs": {} }
+  ]
+}

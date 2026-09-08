@@ -1,0 +1,19 @@
+{
+  "id": "EN-presenca", "nome": "Presença", "tabela": "attendances", "tipo_ts": "Attendance",
+  "descricao": "Um cooperado, um dia, presente ou ausente.",
+  "status": "confirmado", "origem": { "tipo": "pdf", "ref": "p.3 CREATE TABLE presencas" },
+  "refs": { "tipos": ["TP-DataLocal"], "entidades": ["EN-cooperativa", "EN-cooperado"], "regras": ["RN-005", "RN-011", "RN-013", "RN-014"], "validacoes": ["VL-006", "VL-010"], "api": ["API-attendance-saveDaily", "API-attendance-byDate"], "telas": ["UI-chamada"] },
+  "campos": [
+    { "nome": "id", "tipo": "TP-Id", "pk": true },
+    { "nome": "cooperative_id", "tipo": "TP-Id", "fk": "EN-cooperativa", "obrigatorio": true },
+    { "nome": "member_id", "tipo": "TP-Id", "fk": "EN-cooperado", "obrigatorio": true },
+    { "nome": "date", "tipo": "TP-DataLocal", "obrigatorio": true },
+    { "nome": "present", "tipo": "boolean", "obrigatorio": true, "padrao": true },
+    { "nome": "note", "tipo": "text", "obrigatorio": false, "pdf": "observacao" },
+    { "nome": "recorded_by", "tipo": "TP-Id", "fk": "EN-usuario", "origem": "complemento" },
+    { "nome": "created_at", "tipo": "TP-Timestamp" }, { "nome": "updated_at", "tipo": "TP-Timestamp" }
+  ],
+  "indices": ["UNIQUE (member_id, date)", "INDEX (cooperative_id, date)"],
+  "invariantes": ["Só conta para rateio se present = true (RN-005).", "Registro ausente ≡ present = false para fins de cálculo."],
+  "nota": "Gravar ausências explicitamente (present=false) preserva a informação 'a chamada foi feita naquele dia'."
+}

@@ -1,0 +1,21 @@
+{
+  "id": "EN-tipo-material", "nome": "Tipo de material", "tabela": "material_types", "tipo_ts": "MaterialType",
+  "descricao": "Catálogo do que se vende. Ex.: PET cristal, papelão ondulado, alumínio lata.",
+  "status": "confirmado", "origem": { "tipo": "pdf", "ref": "p.3 CREATE TABLE tipos_material" },
+  "refs": { "tipos": ["TP-CategoriaMaterial"], "entidades": ["EN-cooperativa", "EN-item-venda"], "api": ["API-materialTypes-list", "API-materialTypes-create"], "telas": ["UI-vendas"] },
+  "campos": [
+    { "nome": "id", "tipo": "TP-Id", "pk": true },
+    { "nome": "cooperative_id", "tipo": "TP-Id", "fk": "EN-cooperativa", "obrigatorio": true },
+    { "nome": "name", "tipo": "TP-Texto", "obrigatorio": true, "unico_por": "cooperative_id" },
+    { "nome": "category", "tipo": "TP-CategoriaMaterial", "obrigatorio": true },
+    { "nome": "active", "tipo": "boolean", "padrao": true },
+    { "nome": "sort_order", "tipo": "integer", "padrao": 0 }
+  ],
+  "seed": [
+    { "name": "PET Cristal", "category": "plastic" }, { "name": "PET Colorido", "category": "plastic" }, { "name": "PEAD (plástico duro)", "category": "plastic" },
+    { "name": "PP", "category": "plastic" }, { "name": "Papelão Ondulado", "category": "paper" }, { "name": "Papel Branco", "category": "paper" }, { "name": "Papel Misto", "category": "paper" },
+    { "name": "Alumínio (lata)", "category": "metal" }, { "name": "Ferro / Sucata", "category": "metal" }, { "name": "Cobre", "category": "metal" },
+    { "name": "Vidro", "category": "glass" }, { "name": "Rejeito", "category": "waste" }
+  ],
+  "invariantes": ["Não se apaga tipo usado em item de venda: desativa."]
+}

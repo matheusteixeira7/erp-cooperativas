@@ -1,0 +1,15 @@
+{
+  "id": "EN-item-venda", "nome": "Item de venda", "tabela": "sale_items", "tipo_ts": "SaleItem",
+  "descricao": "Um material pesado dentro de uma venda.",
+  "status": "confirmado", "origem": { "tipo": "pdf", "ref": "p.3 CREATE TABLE itens_venda" },
+  "refs": { "tipos": ["TP-PesoKg", "TP-PrecoPorKg", "TP-DinheiroBRL"], "entidades": ["EN-venda", "EN-tipo-material"], "regras": ["RN-015"], "validacoes": ["VL-002", "VL-003"], "telas": ["UI-vendas"] },
+  "campos": [
+    { "nome": "id", "tipo": "TP-Id", "pk": true },
+    { "nome": "sale_id", "tipo": "TP-Id", "fk": "EN-venda", "obrigatorio": true, "on_delete": "cascade" },
+    { "nome": "material_type_id", "tipo": "TP-Id", "fk": "EN-tipo-material", "obrigatorio": true },
+    { "nome": "weight_kg", "tipo": "TP-PesoKg", "obrigatorio": true },
+    { "nome": "price_per_kg", "tipo": "TP-PrecoPorKg", "obrigatorio": true },
+    { "nome": "subtotal", "tipo": "TP-DinheiroBRL", "descricao": "round_half_even(weight_kg × price_per_kg, 2). Coluna gerada ou calculada no serviço; nunca aceita do cliente.", "pdf": "GENERATED ALWAYS AS (peso_kg * preco_por_kg)" },
+    { "nome": "bale_count", "tipo": "integer", "obrigatorio": false, "descricao": "Quantos fardos. Informativo.", "origem": "complemento" }
+  ]
+}

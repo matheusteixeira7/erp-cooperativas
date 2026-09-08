@@ -1,0 +1,18 @@
+{
+  "id": "EN-despesa", "nome": "Despesa operacional", "tabela": "expenses", "tipo_ts": "Expense",
+  "descricao": "Custo do galpão que sai da receita antes do rateio.",
+  "status": "confirmado", "origem": { "tipo": "pdf", "ref": "p.3 CREATE TABLE despesas" },
+  "refs": { "tipos": ["TP-DinheiroBRL", "TP-DataLocal"], "entidades": ["EN-cooperativa"], "regras": ["RN-003", "RN-011"], "validacoes": ["VL-004", "VL-006"], "api": ["API-expenses-create", "API-expenses-list", "API-expenses-delete"], "telas": ["UI-financeiro"] },
+  "campos": [
+    { "nome": "id", "tipo": "TP-Id", "pk": true },
+    { "nome": "cooperative_id", "tipo": "TP-Id", "fk": "EN-cooperativa", "obrigatorio": true },
+    { "nome": "description", "tipo": "TP-Texto", "obrigatorio": true, "pdf": "descricao VARCHAR(150)" },
+    { "nome": "category", "tipo": "string", "obrigatorio": false, "sugestoes": ["aluguel", "energia", "agua", "combustivel", "manutencao", "aterro", "alimentacao", "epi", "outros"], "origem": "complemento" },
+    { "nome": "amount", "tipo": "TP-DinheiroBRL", "obrigatorio": true, "pdf": "valor" },
+    { "nome": "incurred_on", "tipo": "TP-DataLocal", "obrigatorio": true, "pdf": "data_despesa" },
+    { "nome": "deleted_at", "tipo": "TP-Timestamp", "obrigatorio": false },
+    { "nome": "created_by", "tipo": "TP-Id", "fk": "EN-usuario" },
+    { "nome": "created_at", "tipo": "TP-Timestamp" }, { "nome": "updated_at", "tipo": "TP-Timestamp" }
+  ],
+  "indices": ["INDEX (cooperative_id, incurred_on)"]
+}

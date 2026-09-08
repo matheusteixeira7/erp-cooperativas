@@ -1,0 +1,14 @@
+{
+  "id": "EN-comprador", "nome": "Comprador", "tabela": "buyers", "tipo_ts": "Buyer",
+  "descricao": "Indústria ou reciclador que compra fardos. O pdf usava texto livre; cadastro evita 'Indústria X' escrito de 5 jeitos.",
+  "status": "proposto", "origem": { "tipo": "complemento", "ref": "pdf p.3 vendas.comprador VARCHAR(100)" },
+  "refs": { "entidades": ["EN-cooperativa", "EN-venda"], "validacoes": ["VL-009"], "api": ["API-buyers-list", "API-buyers-create"], "telas": ["UI-vendas"] },
+  "campos": [
+    { "nome": "id", "tipo": "TP-Id", "pk": true },
+    { "nome": "cooperative_id", "tipo": "TP-Id", "fk": "EN-cooperativa", "obrigatorio": true },
+    { "nome": "name", "tipo": "TP-Texto", "obrigatorio": true, "unico_por": "cooperative_id" },
+    { "nome": "cnpj", "tipo": "string", "regex": "^[0-9]{14}$", "obrigatorio": false },
+    { "nome": "contact", "tipo": "TP-Texto", "obrigatorio": false },
+    { "nome": "active", "tipo": "boolean", "padrao": true }
+  ]
+}

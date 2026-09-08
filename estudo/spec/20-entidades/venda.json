@@ -1,0 +1,21 @@
+{
+  "id": "EN-venda", "nome": "Venda", "tabela": "sales", "tipo_ts": "Sale",
+  "descricao": "Cabeçalho de uma saída de material para um comprador.",
+  "status": "confirmado", "origem": { "tipo": "pdf", "ref": "p.3 CREATE TABLE vendas" },
+  "refs": { "tipos": ["TP-DinheiroBRL", "TP-DataLocal"], "entidades": ["EN-cooperativa", "EN-comprador", "EN-item-venda"], "regras": ["RN-003", "RN-011", "RN-015", "RN-016"], "validacoes": ["VL-006", "VL-009"], "api": ["API-sales-create", "API-sales-list", "API-sales-delete"], "telas": ["UI-vendas"] },
+  "campos": [
+    { "nome": "id", "tipo": "TP-Id", "pk": true },
+    { "nome": "cooperative_id", "tipo": "TP-Id", "fk": "EN-cooperativa", "obrigatorio": true },
+    { "nome": "buyer_id", "tipo": "TP-Id", "fk": "EN-comprador", "obrigatorio": true, "pdf": "comprador VARCHAR" },
+    { "nome": "sold_on", "tipo": "TP-DataLocal", "obrigatorio": true, "pdf": "data_venda" },
+    { "nome": "total_amount", "tipo": "TP-DinheiroBRL", "obrigatorio": true, "descricao": "Calculado no servidor = soma dos subtotais (RN-015). Nunca aceito do cliente." },
+    { "nome": "total_weight_kg", "tipo": "TP-PesoKg", "descricao": "Calculado. Soma dos pesos." },
+    { "nome": "invoice_number", "tipo": "string", "obrigatorio": false, "descricao": "Nº da nota fiscal, se houver.", "origem": "complemento" },
+    { "nome": "note", "tipo": "text", "obrigatorio": false },
+    { "nome": "deleted_at", "tipo": "TP-Timestamp", "obrigatorio": false, "descricao": "Soft delete (PL-004)." },
+    { "nome": "created_by", "tipo": "TP-Id", "fk": "EN-usuario" },
+    { "nome": "created_at", "tipo": "TP-Timestamp" }, { "nome": "updated_at", "tipo": "TP-Timestamp" }
+  ],
+  "indices": ["INDEX (cooperative_id, sold_on)"],
+  "invariantes": ["Tem ≥ 1 item (RN-016).", "total_amount = Σ item.subtotal (RN-015).", "Não entra no rateio se deleted_at não nulo."]
+}
