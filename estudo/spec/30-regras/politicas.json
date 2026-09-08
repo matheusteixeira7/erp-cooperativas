@@ -1,0 +1,29 @@
+{
+  "descricao": "Quem pode fazer o quê. Implementar como middleware tRPC (requireRole) em cima de protectedProcedure. Violação = FORBIDDEN (ERR-AUTH-002).",
+  "politicas": [
+    {
+      "id": "PL-001", "nome": "Matriz de perfis",
+      "descricao": "manager: tudo na própria cooperativa. operator: lançamentos do dia a dia. member: leitura do próprio extrato e presenças.",
+      "matriz": {
+        "members.*": ["manager"], "members.list": ["manager", "operator"],
+        "attendance.*": ["manager", "operator"], "attendance.mine": ["member"],
+        "materialTypes.list": ["manager", "operator"], "materialTypes.create": ["manager"],
+        "buyers.list": ["manager", "operator"], "buyers.create": ["manager", "operator"],
+        "sales.create": ["manager", "operator"], "sales.list": ["manager", "operator"], "sales.delete": ["manager"],
+        "expenses.create": ["manager", "operator"], "expenses.list": ["manager", "operator"], "expenses.delete": ["manager"],
+        "advances.create": ["manager", "operator"], "advances.list": ["manager", "operator"], "advances.cancel": ["manager"],
+        "payoutSettings.get": ["manager"], "payoutSettings.update": ["manager"],
+        "payouts.simulate": ["manager"], "payouts.close": ["manager"], "payouts.reopen": ["manager"], "payouts.list": ["manager"], "payouts.byId": ["manager"],
+        "payouts.memberStatement": ["manager", "member (só o próprio)"]
+      },
+      "status": "proposto", "origem": { "tipo": "complemento", "ref": "pdf sem auth" },
+      "refs": { "tipos": ["TP-Perfil"], "entidades": ["EN-usuario"], "erros": ["ERR-AUTH-001", "ERR-AUTH-002"], "testes": ["TS-016"] }
+    },
+    { "id": "PL-002", "nome": "Só gestor fecha e reabre mês", "status": "proposto", "origem": { "tipo": "complemento", "ref": "-" }, "descricao": "payouts.close e payouts.reopen exigem manager. Reabrir exige motivo (mín. 10 caracteres).", "refs": { "regras": ["RN-023"], "api": ["API-payouts-close", "API-payouts-reopen"], "testes": ["TS-016"] } },
+    { "id": "PL-003", "nome": "Só gestor cadastra, edita e desliga cooperado", "status": "proposto", "origem": { "tipo": "complemento", "ref": "-" }, "descricao": "Operador vê a lista (precisa para a chamada) mas não altera.", "refs": { "api": ["API-members-create", "API-members-update", "API-members-deactivate"] } },
+    { "id": "PL-004", "nome": "Exclusão de lançamentos", "status": "proposto", "origem": { "tipo": "complemento", "ref": "-" }, "descricao": "Só manager exclui venda/despesa e cancela vale. Só em mês aberto (RN-011). Sempre soft delete (RN-022) com auditoria.", "refs": { "regras": ["RN-011", "RN-022"], "api": ["API-sales-delete", "API-expenses-delete", "API-advances-cancel"] } },
+    { "id": "PL-005", "nome": "Dados pessoais (LGPD)", "status": "proposto", "origem": { "tipo": "complemento", "ref": "Lei 13.709/18" }, "descricao": "CPF sai mascarado (***.456.789-**) em toda listagem; completo só em members.byId para manager. Chave PIX só para manager. Extrato do cooperado mostra só os dados dele. Acesso a CPF/PIX completo gera audit_log action=read? Não: gera log só em exportações. Retenção: dados de ex-cooperado mantidos 5 anos (prazo fiscal) e depois anonimizados.", "refs": { "tipos": ["TP-CPF", "TP-ChavePix"], "entidades": ["EN-cooperado", "EN-log-auditoria"], "nf": ["NF-006"] } },
+    { "id": "PL-006", "nome": "Auditoria obrigatória", "status": "proposto", "origem": { "tipo": "complemento", "ref": "-" }, "descricao": "Toda mutation grava audit_logs (user, action, entity, before/after) na mesma transação. Fechamento e reabertura sempre. Login também.", "refs": { "entidades": ["EN-log-auditoria"], "tipos": ["TP-AcaoAuditoria"] } },
+    { "id": "PL-007", "nome": "Isolamento de tenant", "status": "proposto", "origem": { "tipo": "repo", "ref": "docs/trpc.md" }, "descricao": "cooperativeId nunca vem do input. Repositórios recebem tenantId do ctx.session. Testes de isolamento obrigatórios em toda listagem e byId.", "refs": { "regras": ["RN-027"], "testes": ["TS-017"], "decisoes": ["DEC-005"] } }
+  ]
+}

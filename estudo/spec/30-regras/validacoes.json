@@ -1,0 +1,279 @@
+{
+  "descricao": "Regras de campo. Falham com BAD_REQUEST (zod) antes de tocar no banco. Mensagens em pt-BR.",
+  "validacoes": [
+    {
+      "id": "VL-001",
+      "nome": "CPF válido e único",
+      "descricao": "11 dígitos, dígitos verificadores corretos, não repetido (11111111111). Único dentro da cooperativa.",
+      "campo": "members.cpf",
+      "erro_duplicado": "ERR-MEMBER-001",
+      "mensagem": "CPF inválido.",
+      "status": "proposto",
+      "origem": {
+        "tipo": "complemento",
+        "ref": "-"
+      },
+      "refs": {
+        "tipos": [
+          "TP-CPF"
+        ],
+        "entidades": [
+          "EN-cooperado"
+        ],
+        "erros": [
+          "ERR-MEMBER-001"
+        ],
+        "testes": [
+          "TS-015"
+        ]
+      }
+    },
+    {
+      "id": "VL-002",
+      "nome": "Peso positivo",
+      "campo": "sale_items.weight_kg",
+      "condicao": "> 0, até 2 casas",
+      "mensagem": "Informe um peso maior que zero.",
+      "status": "confirmado",
+      "origem": {
+        "tipo": "pdf",
+        "ref": "p.11 'if (!novoItem.peso_kg)'"
+      },
+      "refs": {
+        "tipos": [
+          "TP-PesoKg"
+        ],
+        "entidades": [
+          "EN-item-venda"
+        ]
+      },
+      "descricao": "sale_items.weight_kg: > 0, até 2 casas."
+    },
+    {
+      "id": "VL-003",
+      "nome": "Preço por kg positivo",
+      "campo": "sale_items.price_per_kg",
+      "condicao": "> 0, até 4 casas",
+      "mensagem": "Informe um preço por kg maior que zero.",
+      "status": "confirmado",
+      "origem": {
+        "tipo": "pdf",
+        "ref": "p.11"
+      },
+      "refs": {
+        "tipos": [
+          "TP-PrecoPorKg"
+        ],
+        "entidades": [
+          "EN-item-venda"
+        ]
+      },
+      "descricao": "sale_items.price_per_kg: > 0, até 4 casas."
+    },
+    {
+      "id": "VL-004",
+      "nome": "Valor da despesa positivo",
+      "campo": "expenses.amount",
+      "condicao": "> 0",
+      "mensagem": "Informe um valor maior que zero.",
+      "status": "confirmado",
+      "origem": {
+        "tipo": "pdf",
+        "ref": "p.15 required"
+      },
+      "refs": {
+        "entidades": [
+          "EN-despesa"
+        ]
+      },
+      "descricao": "expenses.amount: > 0."
+    },
+    {
+      "id": "VL-005",
+      "nome": "Valor do vale positivo",
+      "campo": "advances.amount",
+      "condicao": "> 0",
+      "mensagem": "Informe um valor maior que zero.",
+      "status": "confirmado",
+      "origem": {
+        "tipo": "pdf",
+        "ref": "p.17 required"
+      },
+      "refs": {
+        "entidades": [
+          "EN-vale"
+        ]
+      },
+      "descricao": "advances.amount: > 0."
+    },
+    {
+      "id": "VL-006",
+      "nome": "Datas de lançamento não podem ser futuras",
+      "campo": "attendances.date, sales.sold_on, expenses.incurred_on, advances.granted_on",
+      "condicao": "≤ hoje (fuso da cooperativa)",
+      "mensagem": "A data não pode ser futura.",
+      "status": "proposto",
+      "origem": {
+        "tipo": "complemento",
+        "ref": "pdf permitia"
+      },
+      "refs": {
+        "tipos": [
+          "TP-DataLocal"
+        ],
+        "entidades": [
+          "EN-presenca",
+          "EN-venda",
+          "EN-despesa",
+          "EN-vale"
+        ]
+      },
+      "descricao": "attendances.date, sales.sold_on, expenses.incurred_on, advances.granted_on: ≤ hoje (fuso da cooperativa)."
+    },
+    {
+      "id": "VL-007",
+      "nome": "Nome do cooperado",
+      "campo": "members.name",
+      "condicao": "2 a 200 caracteres, aparado",
+      "mensagem": "Informe o nome completo.",
+      "status": "confirmado",
+      "origem": {
+        "tipo": "pdf",
+        "ref": "p.3 NOT NULL"
+      },
+      "refs": {
+        "entidades": [
+          "EN-cooperado"
+        ]
+      },
+      "descricao": "members.name: 2 a 200 caracteres, aparado."
+    },
+    {
+      "id": "VL-008",
+      "nome": "Admissão não futura e desligamento após admissão",
+      "campo": "members.admitted_on, members.left_on",
+      "condicao": "admitted_on ≤ hoje; left_on ≥ admitted_on",
+      "mensagem": "Datas de admissão/desligamento inválidas.",
+      "status": "proposto",
+      "origem": {
+        "tipo": "complemento",
+        "ref": "-"
+      },
+      "refs": {
+        "entidades": [
+          "EN-cooperado"
+        ]
+      },
+      "descricao": "members.admitted_on, members.left_on: admitted_on ≤ hoje; left_on ≥ admitted_on."
+    },
+    {
+      "id": "VL-009",
+      "nome": "Comprador obrigatório e existente",
+      "campo": "sales.buyer_id",
+      "condicao": "uuid de buyer ativo da mesma cooperativa",
+      "mensagem": "Selecione o comprador.",
+      "erro_inexistente": "ERR-SALE-002",
+      "status": "confirmado",
+      "origem": {
+        "tipo": "pdf",
+        "ref": "p.11 'Informe o comprador'"
+      },
+      "refs": {
+        "entidades": [
+          "EN-comprador",
+          "EN-venda"
+        ],
+        "erros": [
+          "ERR-SALE-002"
+        ]
+      },
+      "descricao": "sales.buyer_id: uuid de buyer ativo da mesma cooperativa."
+    },
+    {
+      "id": "VL-010",
+      "nome": "Payload da chamada",
+      "campo": "attendance.saveDaily input",
+      "condicao": "date obrigatória; entries não vazio; cada member_id existe, é da cooperativa e estava ativo na data; sem member_id repetido",
+      "mensagem": "Lista de presença inválida.",
+      "erro_membro": "ERR-MEMBER-002",
+      "status": "proposto",
+      "origem": {
+        "tipo": "pdf",
+        "ref": "p.19 sem validação"
+      },
+      "refs": {
+        "entidades": [
+          "EN-presenca"
+        ],
+        "regras": [
+          "RN-014"
+        ],
+        "erros": [
+          "ERR-MEMBER-002",
+          "ERR-MEMBER-003"
+        ]
+      },
+      "descricao": "attendance.saveDaily input: date obrigatória; entries não vazio; cada member_id existe, é da cooperativa e estava ativo na data; sem member_id repetido."
+    },
+    {
+      "id": "VL-011",
+      "nome": "Período válido",
+      "campo": "period",
+      "condicao": "regex YYYY-MM; ano entre 2020 e 2100",
+      "mensagem": "Período inválido.",
+      "status": "proposto",
+      "origem": {
+        "tipo": "complemento",
+        "ref": "pdf aceitava mes/ano soltos"
+      },
+      "refs": {
+        "tipos": [
+          "TP-MesAno"
+        ]
+      },
+      "descricao": "period: regex YYYY-MM; ano entre 2020 e 2100."
+    },
+    {
+      "id": "VL-012",
+      "nome": "Chave PIX com formato reconhecível",
+      "campo": "members.pix_key",
+      "condicao": "CPF(11) | CNPJ(14) | e-mail | +55 e 10-11 dígitos | uuid",
+      "mensagem": "Chave PIX inválida.",
+      "status": "proposto",
+      "origem": {
+        "tipo": "complemento",
+        "ref": "-"
+      },
+      "refs": {
+        "tipos": [
+          "TP-ChavePix"
+        ],
+        "entidades": [
+          "EN-cooperado"
+        ]
+      },
+      "descricao": "members.pix_key: CPF(11) | CNPJ(14) | e-mail | +55 e 10-11 dígitos | uuid."
+    },
+    {
+      "id": "VL-013",
+      "nome": "Percentuais dos fundos respeitam o mínimo legal",
+      "campo": "payout_settings.*_rate",
+      "condicao": "legal_reserve_rate ≥ 0.10; fates_rate ≥ 0.05; soma < 1",
+      "mensagem": "Reserva Legal mínima é 10% e FATES mínimo é 5%.",
+      "status": "confirmado",
+      "origem": {
+        "tipo": "decisao",
+        "ref": "DEC-002; Lei 5.764 art. 28"
+      },
+      "refs": {
+        "entidades": [
+          "EN-parametros-rateio"
+        ],
+        "regras": [
+          "RN-010"
+        ]
+      },
+      "descricao": "payout_settings.*_rate: legal_reserve_rate ≥ 0.10; fates_rate ≥ 0.05; soma < 1."
+    }
+  ]
+}

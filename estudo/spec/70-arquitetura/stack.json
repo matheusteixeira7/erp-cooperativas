@@ -1,0 +1,27 @@
+{
+  "id": "ARQ-stack", "nome": "Stack", "status": "confirmado",
+  "descricao": "Stack real do repositório (lida em 2026-09-08). Difere do protótipo do pdf (Express + React/Vite + Tailwind 3). Agentes devem seguir esta, não a do pdf.",
+  "origem": { "tipo": "repo", "ref": "package.json, apps/web/package.json, docs/trpc.md, AGENTS.md" },
+  "refs": { "decisoes": ["DEC-003", "DEC-004"], "tarefas": ["TK-001"] },
+  "camadas": [
+    { "camada": "Monorepo", "tecnologia": "pnpm 10 workspaces + Turborepo 2", "nota": "apps/* e packages/*. Scripts: build, dev, lint, format, typecheck." },
+    { "camada": "Runtime", "tecnologia": "Node ≥ 20, TypeScript 5", "nota": "-" },
+    { "camada": "Framework web", "tecnologia": "Next.js 16 (App Router, Turbopack)", "nota": "AGENTS.md avisa: APIs diferem do treinamento; ler node_modules/next/dist/docs antes de codar." },
+    { "camada": "UI", "tecnologia": "React 19, Tailwind CSS 4, shadcn/ui (base-ui) em packages/ui, lucide-react, next-themes", "nota": "Adicionar componente: pnpm dlx shadcn@latest add <comp> -c apps/web." },
+    { "camada": "API", "tecnologia": "tRPC 11 em /api/trpc, zod 4", "nota": "Um initTRPC (server/trpc/init.ts). protectedProcedure existe. Erros tipados TRPCError." },
+    { "camada": "Banco", "tecnologia": "PostgreSQL 17 (docker compose local), Drizzle ORM 0.45 + drizzle-kit", "nota": "Schema em apps/web/server/db/schema.ts (hoje vazio). Migrations versionadas em apps/web/drizzle." },
+    { "camada": "Config", "tecnologia": "@t3-oss/env-nextjs", "nota": "DATABASE_URL validada no build." },
+    { "camada": "Auth", "tecnologia": "A DEFINIR", "status": "pergunta-aberta", "recomendacao": "Auth.js v5 (credentials) ou implementação própria com cookie assinado + argon2. Resolver sessão só em createTRPCContext.", "nota": "context.ts já tem Session { user: { id, cooperativeId, roles } }." },
+    { "camada": "Testes", "tecnologia": "A DEFINIR", "status": "proposto", "recomendacao": "vitest para domínio puro e routers via appRouter.createCaller(createInnerTRPCContext({session})); Playwright para 3 fluxos críticos (chamada, venda, fechamento). Banco de teste via docker compose ou testcontainers." },
+    { "camada": "Dinheiro", "tecnologia": "A DEFINIR", "status": "proposto", "recomendacao": "Inteiros em centavos no domínio (packages/domain), numeric(12,2) no banco, number com 2 casas no wire." },
+    { "camada": "Lint/format", "tecnologia": "ESLint 9 (flat), Prettier 3 + plugin tailwind", "nota": "-" }
+  ],
+  "diferencas_vs_pdf": [
+    { "pdf": "Express + rotas REST", "repo": "tRPC procedures", "impacto": "50-api reescrito como tRPC (DEC-003)" },
+    { "pdf": "React 18 + Vite + Tailwind 3", "repo": "Next.js 16 + React 19 + Tailwind 4 + shadcn", "impacto": "Telas viram rotas do App Router; componentes de packages/ui" },
+    { "pdf": "pg puro com SQL em string", "repo": "Drizzle ORM", "impacto": "Entidades viram schema Drizzle; migrations geradas" },
+    { "pdf": "SERIAL ids", "repo": "uuid (docs/trpc.md)", "impacto": "TP-Id" },
+    { "pdf": "Sem tenant", "repo": "session.user.cooperativeId", "impacto": "cooperative_id em toda tabela (DEC-005)" },
+    { "pdf": "Render + Vercel", "repo": "Vercel (Next) + Postgres gerenciado", "impacto": "infra.json" }
+  ]
+}

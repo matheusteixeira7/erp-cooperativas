@@ -1,0 +1,801 @@
+{
+  "descricao": "Telas do app Next.js (App Router). Rotas em apps/web/app/(app)/... protegidas por layout que exige sessão. Componentes de packages/ui (shadcn). Textos em pt-BR. Toda tela declara estados: carregando, vazio, erro, sucesso.",
+  "principios_ux": [
+    "Todo texto visível ao usuário em pt-BR (DEC-004). Nomes de componente, props, rotas de arquivo e variáveis em inglês. Slugs de URL em português (/chamada, /vendas) porque o usuário os vê.",
+    "Galpão: alvo de toque ≥ 48px, contraste alto, funciona com uma mão, sem hover obrigatório.",
+    "Números em pt-BR: R$ 1.234,56 e 1.650 kg. Datas dd/mm/aaaa.",
+    "Ação destrutiva ou irreversível (fechar mês, excluir) sempre com diálogo de confirmação que repete o que vai acontecer.",
+    "Erro da API vira toast com mensagem_pt do catálogo; erro de validação vai para o campo.",
+    "Mês fechado: telas de lançamento mostram faixa 'Mês fechado' e desabilitam edição."
+  ],
+  "telas": [
+    {
+      "id": "UI-shell",
+      "nome": "Shell do app (sidebar + header)",
+      "rota": "app/(app)/layout.tsx",
+      "descricao": "Sidebar colapsável (já existe em components/app-sidebar.tsx, hoje com dados fake). Menu por perfil. Header com nome da cooperativa e usuário.",
+      "perfis": [
+        "manager",
+        "operator",
+        "member"
+      ],
+      "menu": [
+        {
+          "rotulo": "Chamada",
+          "rota": "/chamada",
+          "icone": "UserCheck",
+          "perfis": [
+            "manager",
+            "operator"
+          ]
+        },
+        {
+          "rotulo": "Vendas",
+          "rota": "/vendas",
+          "icone": "ShoppingCart",
+          "perfis": [
+            "manager",
+            "operator"
+          ]
+        },
+        {
+          "rotulo": "Despesas e vales",
+          "rota": "/financeiro",
+          "icone": "CreditCard",
+          "perfis": [
+            "manager",
+            "operator"
+          ]
+        },
+        {
+          "rotulo": "Fechamento",
+          "rota": "/fechamento",
+          "icone": "DollarSign",
+          "perfis": [
+            "manager"
+          ]
+        },
+        {
+          "rotulo": "Histórico",
+          "rota": "/fechamento/historico",
+          "icone": "History",
+          "perfis": [
+            "manager"
+          ]
+        },
+        {
+          "rotulo": "Cooperados",
+          "rota": "/cooperados",
+          "icone": "Users",
+          "perfis": [
+            "manager"
+          ]
+        },
+        {
+          "rotulo": "Meu extrato",
+          "rota": "/extrato",
+          "icone": "Receipt",
+          "perfis": [
+            "member"
+          ]
+        },
+        {
+          "rotulo": "Configurações",
+          "rota": "/configuracoes/rateio",
+          "icone": "Settings2",
+          "perfis": [
+            "manager"
+          ]
+        }
+      ],
+      "componentes": [
+        "Sidebar",
+        "SidebarInset",
+        "Breadcrumb",
+        "DropdownMenu (usuário/sair)"
+      ],
+      "status": "confirmado",
+      "origem": {
+        "tipo": "pdf",
+        "ref": "p.21-22 App.jsx; repo app-sidebar.tsx"
+      },
+      "refs": {
+        "api": [
+          "API-auth-session",
+          "API-auth-logout"
+        ],
+        "politicas": [
+          "PL-001"
+        ],
+        "tarefas": [
+          "TK-014"
+        ]
+      }
+    },
+    {
+      "id": "UI-login",
+      "nome": "Login",
+      "rota": "/login",
+      "descricao": "E-mail e senha. Erro genérico para credencial inválida. Redireciona para a primeira tela permitida pelo perfil.",
+      "perfis": [
+        "todos"
+      ],
+      "campos": [
+        {
+          "nome": "email",
+          "tipo": "email",
+          "obrigatorio": true
+        },
+        {
+          "nome": "password",
+          "tipo": "password",
+          "obrigatorio": true
+        }
+      ],
+      "acoes": [
+        {
+          "rotulo": "Entrar",
+          "api": "API-auth-login"
+        }
+      ],
+      "estados": [
+        "idle",
+        "enviando",
+        "erro-credenciais"
+      ],
+      "status": "proposto",
+      "origem": {
+        "tipo": "complemento",
+        "ref": "-"
+      },
+      "refs": {
+        "api": [
+          "API-auth-login"
+        ],
+        "erros": [
+          "ERR-AUTH-003"
+        ],
+        "tarefas": [
+          "TK-014"
+        ]
+      }
+    },
+    {
+      "id": "UI-chamada",
+      "nome": "Chamada diária",
+      "rota": "/chamada",
+      "dispositivo": "celular/tablet primeiro",
+      "descricao": "Lista de cooperados ativos na data, cada card inteiro é um botão que alterna presente/ausente. Contador 'X / Y presentes'. Botões 'Marcar todos' e 'Desmarcar todos'. Seletor de data para correções. Botão fixo no rodapé 'Confirmar chamada'.",
+      "perfis": [
+        "manager",
+        "operator"
+      ],
+      "dados": {
+        "carrega": [
+          "API-attendance-byDate"
+        ],
+        "envia": [
+          "API-attendance-saveDaily"
+        ]
+      },
+      "campos": [
+        {
+          "nome": "date",
+          "tipo": "date",
+          "padrao": "hoje",
+          "max": "hoje"
+        }
+      ],
+      "acoes": [
+        {
+          "rotulo": "Marcar todos presentes",
+          "efeito": "local"
+        },
+        {
+          "rotulo": "Desmarcar todos",
+          "efeito": "local"
+        },
+        {
+          "rotulo": "Confirmar chamada",
+          "api": "API-attendance-saveDaily",
+          "feedback": "toast 'Chamada de dd/mm salva. N presentes.'"
+        }
+      ],
+      "estados": [
+        "carregando",
+        "vazio (nenhum cooperado ativo: link para cadastrar)",
+        "mês fechado (somente leitura, faixa de aviso)",
+        "salvando",
+        "erro"
+      ],
+      "requisitos_ux": [
+        "Card ≥ 56px de altura, nome legível a 1 m.",
+        "Presente = verde com ícone check; ausente = cinza/vermelho com X.",
+        "Se a data mudar com alterações não salvas, perguntar antes de trocar.",
+        "Funciona offline-first? Não na v1 (NF-004): mostrar aviso claro se sem rede."
+      ],
+      "status": "confirmado",
+      "origem": {
+        "tipo": "pdf",
+        "ref": "p.6-7 ChamadaDiaria.jsx"
+      },
+      "refs": {
+        "entidades": [
+          "EN-presenca"
+        ],
+        "regras": [
+          "RN-011",
+          "RN-013"
+        ],
+        "api": [
+          "API-attendance-byDate",
+          "API-attendance-saveDaily"
+        ],
+        "fluxos": [
+          "FL-002"
+        ],
+        "nf": [
+          "NF-001",
+          "NF-004"
+        ],
+        "tarefas": [
+          "TK-015"
+        ]
+      }
+    },
+    {
+      "id": "UI-vendas",
+      "nome": "Vendas e pesagem",
+      "rota": "/vendas",
+      "dispositivo": "tablet/desktop",
+      "descricao": "Formulário: comprador (combobox com criar novo), data. Linha de inserção rápida: material, peso, preço/kg, botão +. Tabela de itens com remover. Card escuro com peso total e valor total. Botão 'Finalizar venda'. Abaixo, lista das vendas do mês.",
+      "perfis": [
+        "manager",
+        "operator"
+      ],
+      "dados": {
+        "carrega": [
+          "API-buyers-list",
+          "API-materialTypes-list",
+          "API-sales-list"
+        ],
+        "envia": [
+          "API-sales-create",
+          "API-buyers-create",
+          "API-sales-delete"
+        ]
+      },
+      "campos": [
+        {
+          "nome": "buyerId",
+          "tipo": "combobox",
+          "obrigatorio": true
+        },
+        {
+          "nome": "soldOn",
+          "tipo": "date",
+          "padrao": "hoje",
+          "max": "hoje"
+        },
+        {
+          "nome": "item.materialTypeId",
+          "tipo": "select"
+        },
+        {
+          "nome": "item.weightKg",
+          "tipo": "number",
+          "step": 0.01,
+          "min": 0.01
+        },
+        {
+          "nome": "item.pricePerKg",
+          "tipo": "number",
+          "step": 0.0001,
+          "min": 0.0001
+        },
+        {
+          "nome": "invoiceNumber",
+          "tipo": "text",
+          "obrigatorio": false
+        }
+      ],
+      "acoes": [
+        {
+          "rotulo": "+ (adicionar item)",
+          "efeito": "local; Enter no campo preço também adiciona"
+        },
+        {
+          "rotulo": "Finalizar venda",
+          "api": "API-sales-create",
+          "confirmacao": false,
+          "feedback": "toast + limpa formulário"
+        },
+        {
+          "rotulo": "Excluir venda (lista)",
+          "api": "API-sales-delete",
+          "perfis": [
+            "manager"
+          ],
+          "confirmacao": "diálogo com comprador, data e valor"
+        }
+      ],
+      "estados": [
+        "carregando catálogo",
+        "sem itens (linha 'Nenhum material adicionado')",
+        "mês fechado",
+        "salvando",
+        "erro"
+      ],
+      "requisitos_ux": [
+        "Subtotal e total recalculam ao digitar (só exibição; servidor recalcula).",
+        "Último preço praticado por material/comprador aparece como sugestão (fase 2).",
+        "Campos numéricos com inputMode='decimal'."
+      ],
+      "status": "confirmado",
+      "origem": {
+        "tipo": "pdf",
+        "ref": "p.10-14 LancamentoVendas.jsx"
+      },
+      "refs": {
+        "entidades": [
+          "EN-venda",
+          "EN-item-venda",
+          "EN-comprador",
+          "EN-tipo-material"
+        ],
+        "regras": [
+          "RN-015",
+          "RN-016"
+        ],
+        "api": [
+          "API-buyers-list",
+          "API-buyers-create",
+          "API-materialTypes-list",
+          "API-sales-create",
+          "API-sales-list",
+          "API-sales-delete"
+        ],
+        "fluxos": [
+          "FL-003"
+        ],
+        "tarefas": [
+          "TK-016"
+        ]
+      }
+    },
+    {
+      "id": "UI-financeiro",
+      "nome": "Despesas e vales",
+      "rota": "/financeiro",
+      "descricao": "Duas abas. Aba Despesas: formulário (descrição, categoria, valor, data) + tabela do mês com total. Aba Vales: formulário (cooperado, tipo, descrição, valor, data) + tabela de pendentes com total a descontar. Seletor de mês no topo.",
+      "perfis": [
+        "manager",
+        "operator"
+      ],
+      "dados": {
+        "carrega": [
+          "API-expenses-list",
+          "API-advances-list",
+          "API-members-list"
+        ],
+        "envia": [
+          "API-expenses-create",
+          "API-expenses-delete",
+          "API-advances-create",
+          "API-advances-cancel"
+        ]
+      },
+      "acoes": [
+        {
+          "rotulo": "Lançar despesa",
+          "api": "API-expenses-create"
+        },
+        {
+          "rotulo": "Excluir despesa",
+          "api": "API-expenses-delete",
+          "perfis": [
+            "manager"
+          ],
+          "confirmacao": true
+        },
+        {
+          "rotulo": "Confirmar vale",
+          "api": "API-advances-create"
+        },
+        {
+          "rotulo": "Cancelar vale",
+          "api": "API-advances-cancel",
+          "perfis": [
+            "manager"
+          ],
+          "confirmacao": "pede motivo"
+        }
+      ],
+      "estados": [
+        "carregando",
+        "vazio por aba",
+        "mês fechado",
+        "erro"
+      ],
+      "requisitos_ux": [
+        "Vales descontados aparecem em filtro separado, não na lista padrão.",
+        "Vale carry_over exibido com badge 'saldo de mês anterior'."
+      ],
+      "status": "confirmado",
+      "origem": {
+        "tipo": "pdf",
+        "ref": "p.15-18 GestaoFinanceira.jsx"
+      },
+      "refs": {
+        "entidades": [
+          "EN-despesa",
+          "EN-vale"
+        ],
+        "api": [
+          "API-expenses-create",
+          "API-expenses-list",
+          "API-expenses-delete",
+          "API-advances-create",
+          "API-advances-list",
+          "API-advances-cancel",
+          "API-members-list"
+        ],
+        "fluxos": [
+          "FL-004",
+          "FL-005"
+        ],
+        "tarefas": [
+          "TK-017"
+        ]
+      }
+    },
+    {
+      "id": "UI-fechamento",
+      "nome": "Fechamento e rateio mensal",
+      "rota": "/fechamento",
+      "dispositivo": "desktop",
+      "descricao": "Seletor de período + 'Atualizar'. Cards: Receita, Despesas, Fundos (Reserva Legal, FATES, outros), Sobra distribuível, Valor da diária (destaque, com 'baseado em N diárias'). Tabela: cooperado, dias, bruto, vales, líquido, saldo devedor. Rodapé: total distribuído e resíduo de arredondamento. Botão 'Fechar mês' → diálogo de confirmação. Se fechado: botão vira 'Mês fechado' + link para histórico.",
+      "perfis": [
+        "manager"
+      ],
+      "dados": {
+        "carrega": [
+          "API-payouts-simulate"
+        ],
+        "envia": [
+          "API-payouts-close"
+        ]
+      },
+      "acoes": [
+        {
+          "rotulo": "Atualizar",
+          "api": "API-payouts-simulate"
+        },
+        {
+          "rotulo": "Fechar mês",
+          "api": "API-payouts-close",
+          "confirmacao": "Diálogo: 'Fechar agosto/2026? R$ 30.770,00 serão rateados entre 7 cooperados. Vales pendentes serão descontados. Esta ação bloqueia lançamentos do mês.' Se mês corrente, aviso extra."
+        },
+        {
+          "rotulo": "Exportar (CSV/PDF)",
+          "api": "API-payouts-export",
+          "disponivel": "após fechar"
+        }
+      ],
+      "estados": [
+        "carregando",
+        "erro sem sobra (ERR-PAYOUT-001) com explicação e links para lançar vendas",
+        "erro sem presença (ERR-PAYOUT-002)",
+        "simulado",
+        "fechando",
+        "fechado"
+      ],
+      "requisitos_ux": [
+        "Warnings da simulação em lista amarela acima da tabela.",
+        "Cooperado com 0 dias aparece esmaecido.",
+        "Se RN-024 aplicável, badge 'abaixo do mínimo' na linha."
+      ],
+      "status": "confirmado",
+      "origem": {
+        "tipo": "pdf",
+        "ref": "p.8-10 PainelFechamentoRateio.jsx"
+      },
+      "refs": {
+        "entidades": [
+          "EN-fechamento",
+          "EN-fechamento-item"
+        ],
+        "regras": [
+          "RN-001",
+          "RN-002",
+          "RN-004",
+          "RN-006",
+          "RN-010",
+          "RN-012",
+          "RN-019",
+          "RN-024"
+        ],
+        "api": [
+          "API-payouts-simulate",
+          "API-payouts-close",
+          "API-payouts-export"
+        ],
+        "fluxos": [
+          "FL-001"
+        ],
+        "tarefas": [
+          "TK-018"
+        ]
+      }
+    },
+    {
+      "id": "UI-historico-fechamentos",
+      "nome": "Histórico de fechamentos",
+      "rota": "/fechamento/historico e /fechamento/[id]",
+      "descricao": "Lista de meses fechados (período, status, sobra distribuível, diária, data). Detalhe: mesmo layout do fechamento, somente leitura, lendo o snapshot. Checkbox 'pago' por cooperado. Botão 'Reabrir mês' (pede motivo).",
+      "perfis": [
+        "manager"
+      ],
+      "dados": {
+        "carrega": [
+          "API-payouts-list",
+          "API-payouts-byId"
+        ],
+        "envia": [
+          "API-payouts-reopen",
+          "API-payouts-markPaid"
+        ]
+      },
+      "acoes": [
+        {
+          "rotulo": "Reabrir mês",
+          "api": "API-payouts-reopen",
+          "confirmacao": "motivo obrigatório ≥ 10 caracteres"
+        },
+        {
+          "rotulo": "Marcar como pago",
+          "api": "API-payouts-markPaid"
+        },
+        {
+          "rotulo": "Exportar",
+          "api": "API-payouts-export"
+        }
+      ],
+      "estados": [
+        "carregando",
+        "vazio ('Nenhum mês fechado ainda')",
+        "detalhe",
+        "reaberto (badge)"
+      ],
+      "status": "proposto",
+      "origem": {
+        "tipo": "complemento",
+        "ref": "-"
+      },
+      "refs": {
+        "entidades": [
+          "EN-fechamento",
+          "EN-fechamento-item"
+        ],
+        "regras": [
+          "RN-023",
+          "RN-025"
+        ],
+        "api": [
+          "API-payouts-list",
+          "API-payouts-byId",
+          "API-payouts-reopen",
+          "API-payouts-markPaid",
+          "API-payouts-export"
+        ],
+        "fluxos": [
+          "FL-001"
+        ],
+        "tarefas": [
+          "TK-018"
+        ]
+      }
+    },
+    {
+      "id": "UI-cooperados",
+      "nome": "Cooperados",
+      "rota": "/cooperados",
+      "descricao": "Tabela com busca (nome/CPF), filtro ativos/todos. Sheet lateral para criar/editar. Ação 'Desligar' pede data. CPF mascarado na tabela, completo no detalhe.",
+      "perfis": [
+        "manager"
+      ],
+      "dados": {
+        "carrega": [
+          "API-members-list",
+          "API-members-byId"
+        ],
+        "envia": [
+          "API-members-create",
+          "API-members-update",
+          "API-members-deactivate"
+        ]
+      },
+      "campos": [
+        {
+          "nome": "name"
+        },
+        {
+          "nome": "cpf",
+          "mascara": "000.000.000-00"
+        },
+        {
+          "nome": "pixKey"
+        },
+        {
+          "nome": "phone"
+        },
+        {
+          "nome": "admittedOn",
+          "tipo": "date"
+        },
+        {
+          "nome": "notes"
+        }
+      ],
+      "estados": [
+        "carregando",
+        "vazio (CTA cadastrar primeiro cooperado)",
+        "erro CPF duplicado no campo"
+      ],
+      "status": "proposto",
+      "origem": {
+        "tipo": "pdf",
+        "ref": "p.5 endpoint existia; tela não"
+      },
+      "refs": {
+        "entidades": [
+          "EN-cooperado"
+        ],
+        "validacoes": [
+          "VL-001",
+          "VL-007",
+          "VL-008",
+          "VL-012"
+        ],
+        "politicas": [
+          "PL-003",
+          "PL-005"
+        ],
+        "api": [
+          "API-members-list",
+          "API-members-byId",
+          "API-members-create",
+          "API-members-update",
+          "API-members-deactivate"
+        ],
+        "fluxos": [
+          "FL-006"
+        ],
+        "tarefas": [
+          "TK-019"
+        ]
+      }
+    },
+    {
+      "id": "UI-extrato-cooperado",
+      "nome": "Meu extrato",
+      "rota": "/extrato",
+      "dispositivo": "celular",
+      "descricao": "Cooperado escolhe o mês. Vê: dias trabalhados (com calendário marcando presenças), valor da diária, bruto, vales descontados (lista), líquido, saldo devedor se houver, status pago. Se o mês não está fechado: mostra só dias trabalhados até agora.",
+      "perfis": [
+        "member"
+      ],
+      "dados": {
+        "carrega": [
+          "API-attendance-mine",
+          "API-payouts-memberStatement"
+        ]
+      },
+      "estados": [
+        "mês aberto (parcial)",
+        "mês fechado",
+        "sem dados"
+      ],
+      "status": "proposto",
+      "origem": {
+        "tipo": "complemento",
+        "ref": "pdf só gestor via"
+      },
+      "refs": {
+        "entidades": [
+          "EN-fechamento-item",
+          "EN-presenca"
+        ],
+        "politicas": [
+          "PL-001",
+          "PL-005"
+        ],
+        "api": [
+          "API-attendance-mine",
+          "API-payouts-memberStatement"
+        ],
+        "tarefas": [
+          "TK-020"
+        ]
+      }
+    },
+    {
+      "id": "UI-parametros",
+      "nome": "Parâmetros de rateio",
+      "rota": "/configuracoes/rateio",
+      "descricao": "Formulário: Reserva Legal %, FATES %, outros fundos %, política de saldo negativo (radio: passa para o próximo mês / perdoa), incluir desligados no mês (switch), vigente a partir de (mês). Abaixo, histórico de versões. Explicação curta de cada fundo com link para a lei.",
+      "perfis": [
+        "manager"
+      ],
+      "dados": {
+        "carrega": [
+          "API-payoutSettings-get"
+        ],
+        "envia": [
+          "API-payoutSettings-update"
+        ]
+      },
+      "campos": [
+        {
+          "nome": "legalReserveRate",
+          "tipo": "percent",
+          "min": 10
+        },
+        {
+          "nome": "fatesRate",
+          "tipo": "percent",
+          "min": 5
+        },
+        {
+          "nome": "otherFundsRate",
+          "tipo": "percent",
+          "min": 0
+        },
+        {
+          "nome": "negativeBalancePolicy",
+          "tipo": "radio"
+        },
+        {
+          "nome": "includeMembersLeftInPeriod",
+          "tipo": "switch"
+        },
+        {
+          "nome": "effectiveFrom",
+          "tipo": "month"
+        }
+      ],
+      "estados": [
+        "padrões legais (isDefault, aviso 'usando mínimos legais')",
+        "salvando",
+        "erro abaixo do mínimo no campo"
+      ],
+      "status": "confirmado",
+      "origem": {
+        "tipo": "decisao",
+        "ref": "DEC-002"
+      },
+      "refs": {
+        "entidades": [
+          "EN-parametros-rateio"
+        ],
+        "regras": [
+          "RN-010",
+          "RN-026"
+        ],
+        "validacoes": [
+          "VL-013"
+        ],
+        "api": [
+          "API-payoutSettings-get",
+          "API-payoutSettings-update"
+        ],
+        "tarefas": [
+          "TK-019"
+        ],
+        "decisoes": [
+          "DEC-002"
+        ]
+      }
+    }
+  ]
+}

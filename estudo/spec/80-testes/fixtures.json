@@ -1,0 +1,540 @@
+{
+  "descricao": "Cenários com dados de entrada e resultado esperado. O validador (validar.py) recalcula tudo pelas regras RN-001..RN-012 e falha se um número não bater. Os mesmos arquivos alimentam packages/domain/src/payout/calculate.test.ts.",
+  "nota_pdf": "O pdf (p.8) mostrava 7 cooperados somando 144 dias, mas dizia 'total 220 diárias' e diária 164,55. Os números não fechavam. Aqui fecham.",
+  "fixtures": [
+    {
+      "id": "FX-ago-2026-com-fundos",
+      "nome": "Agosto/2026 com fundos legais (padrão)",
+      "period": "2026-08",
+      "settings": {
+        "legalReserveRate": 0.1,
+        "fatesRate": 0.05,
+        "otherFundsRate": 0,
+        "negativeBalancePolicy": "carry_over",
+        "includeMembersLeftInPeriod": true
+      },
+      "members": [
+        {
+          "id": "m1",
+          "name": "Ana Maria Silva",
+          "workedDays": 22,
+          "advances": [
+            {
+              "amount": 200.0,
+              "grantedOn": "2026-08-05",
+              "description": "Vale mercado"
+            }
+          ]
+        },
+        {
+          "id": "m2",
+          "name": "Carlos Eduardo Santos",
+          "workedDays": 20,
+          "advances": [
+            {
+              "amount": 150.0,
+              "grantedOn": "2026-08-12"
+            }
+          ]
+        },
+        {
+          "id": "m3",
+          "name": "João Pedro Oliveira",
+          "workedDays": 18,
+          "advances": [
+            {
+              "amount": 300.0,
+              "grantedOn": "2026-08-12",
+              "description": "Adiantamento emergencial"
+            }
+          ]
+        },
+        {
+          "id": "m4",
+          "name": "Maria Aparecida Costa",
+          "workedDays": 22,
+          "advances": [
+            {
+              "amount": 100.0,
+              "grantedOn": "2026-08-20"
+            }
+          ]
+        },
+        {
+          "id": "m5",
+          "name": "Roberto Souza",
+          "workedDays": 21,
+          "advances": [
+            {
+              "amount": 250.0,
+              "grantedOn": "2026-08-01"
+            }
+          ]
+        },
+        {
+          "id": "m6",
+          "name": "Fernanda Lima",
+          "workedDays": 22,
+          "advances": []
+        },
+        {
+          "id": "m7",
+          "name": "Gabriel Martins",
+          "workedDays": 19,
+          "advances": [
+            {
+              "amount": 120.0,
+              "grantedOn": "2026-08-15"
+            }
+          ]
+        }
+      ],
+      "sales": [
+        {
+          "soldOn": "2026-08-08",
+          "buyer": "Reciclagem Indústria X",
+          "items": [
+            {
+              "material": "PET Cristal",
+              "weightKg": 3200,
+              "pricePerKg": 3.2
+            },
+            {
+              "material": "Papelão Ondulado",
+              "weightKg": 12600,
+              "pricePerKg": 0.65
+            }
+          ]
+        },
+        {
+          "soldOn": "2026-08-19",
+          "buyer": "Metalúrgica Sul",
+          "items": [
+            {
+              "material": "Alumínio (lata)",
+              "weightKg": 2500,
+              "pricePerKg": 6.4
+            },
+            {
+              "material": "PEAD (plástico duro)",
+              "weightKg": 2000,
+              "pricePerKg": 2.0
+            }
+          ]
+        },
+        {
+          "soldOn": "2026-08-28",
+          "buyer": "Reciclagem Indústria X",
+          "items": [
+            {
+              "material": "PET Colorido",
+              "weightKg": 4028,
+              "pricePerKg": 2.5
+            }
+          ]
+        }
+      ],
+      "expenses": [
+        {
+          "incurredOn": "2026-08-10",
+          "description": "Manutenção da prensa hidráulica",
+          "amount": 850.0
+        },
+        {
+          "incurredOn": "2026-08-15",
+          "description": "Combustível do caminhão",
+          "amount": 420.0
+        },
+        {
+          "incurredOn": "2026-08-18",
+          "description": "Energia elétrica",
+          "amount": 1250.0
+        },
+        {
+          "incurredOn": "2026-08-05",
+          "description": "Aluguel do galpão",
+          "amount": 6000.0
+        },
+        {
+          "incurredOn": "2026-08-30",
+          "description": "Aterro (rejeito)",
+          "amount": 3780.0
+        }
+      ],
+      "espera": {
+        "grossRevenue": 48500.0,
+        "totalExpenses": 12300.0,
+        "surplus": 36200.0,
+        "legalReserveAmount": 3620.0,
+        "fatesAmount": 1810.0,
+        "otherFundsAmount": 0.0,
+        "distributableSurplus": 30770.0,
+        "totalWorkedDays": 144,
+        "dayValue": 213.68,
+        "distributedTotal": 30769.92,
+        "roundingResidual": 0.08,
+        "items": [
+          {
+            "member": "m1",
+            "workedDays": 22,
+            "grossAmount": 4700.96,
+            "deductionsAmount": 200.0,
+            "netAmount": 4500.96,
+            "carryOverDebt": 0.0
+          },
+          {
+            "member": "m2",
+            "workedDays": 20,
+            "grossAmount": 4273.6,
+            "deductionsAmount": 150.0,
+            "netAmount": 4123.6,
+            "carryOverDebt": 0.0
+          },
+          {
+            "member": "m3",
+            "workedDays": 18,
+            "grossAmount": 3846.24,
+            "deductionsAmount": 300.0,
+            "netAmount": 3546.24,
+            "carryOverDebt": 0.0
+          },
+          {
+            "member": "m4",
+            "workedDays": 22,
+            "grossAmount": 4700.96,
+            "deductionsAmount": 100.0,
+            "netAmount": 4600.96,
+            "carryOverDebt": 0.0
+          },
+          {
+            "member": "m5",
+            "workedDays": 21,
+            "grossAmount": 4487.28,
+            "deductionsAmount": 250.0,
+            "netAmount": 4237.28,
+            "carryOverDebt": 0.0
+          },
+          {
+            "member": "m6",
+            "workedDays": 22,
+            "grossAmount": 4700.96,
+            "deductionsAmount": 0.0,
+            "netAmount": 4700.96,
+            "carryOverDebt": 0.0
+          },
+          {
+            "member": "m7",
+            "workedDays": 19,
+            "grossAmount": 4059.92,
+            "deductionsAmount": 120.0,
+            "netAmount": 3939.92,
+            "carryOverDebt": 0.0
+          }
+        ],
+        "totalNet": 29649.92,
+        "totalDeductions": 1120.0,
+        "newCarryOverAdvances": []
+      }
+    },
+    {
+      "id": "FX-ago-2026-sem-fundos",
+      "nome": "Agosto/2026 sem fundos (comportamento do pdf, corrigido o arredondamento)",
+      "period": "2026-08",
+      "settings": {
+        "legalReserveRate": 0,
+        "fatesRate": 0,
+        "otherFundsRate": 0,
+        "negativeBalancePolicy": "carry_over",
+        "includeMembersLeftInPeriod": true
+      },
+      "nota": "Percentuais zero violam VL-013 na UI; esta fixture existe só para testar o cálculo puro.",
+      "herda_de": "FX-ago-2026-com-fundos",
+      "espera": {
+        "surplus": 36200.0,
+        "legalReserveAmount": 0.0,
+        "fatesAmount": 0.0,
+        "distributableSurplus": 36200.0,
+        "totalWorkedDays": 144,
+        "dayValue": 251.38,
+        "distributedTotal": 36198.72,
+        "roundingResidual": 1.28,
+        "items": [
+          {
+            "member": "m1",
+            "workedDays": 22,
+            "grossAmount": 5530.36,
+            "deductionsAmount": 200.0,
+            "netAmount": 5330.36,
+            "carryOverDebt": 0.0
+          },
+          {
+            "member": "m2",
+            "workedDays": 20,
+            "grossAmount": 5027.6,
+            "deductionsAmount": 150.0,
+            "netAmount": 4877.6,
+            "carryOverDebt": 0.0
+          },
+          {
+            "member": "m3",
+            "workedDays": 18,
+            "grossAmount": 4524.84,
+            "deductionsAmount": 300.0,
+            "netAmount": 4224.84,
+            "carryOverDebt": 0.0
+          },
+          {
+            "member": "m4",
+            "workedDays": 22,
+            "grossAmount": 5530.36,
+            "deductionsAmount": 100.0,
+            "netAmount": 5430.36,
+            "carryOverDebt": 0.0
+          },
+          {
+            "member": "m5",
+            "workedDays": 21,
+            "grossAmount": 5278.98,
+            "deductionsAmount": 250.0,
+            "netAmount": 5028.98,
+            "carryOverDebt": 0.0
+          },
+          {
+            "member": "m6",
+            "workedDays": 22,
+            "grossAmount": 5530.36,
+            "deductionsAmount": 0.0,
+            "netAmount": 5530.36,
+            "carryOverDebt": 0.0
+          },
+          {
+            "member": "m7",
+            "workedDays": 19,
+            "grossAmount": 4776.22,
+            "deductionsAmount": 120.0,
+            "netAmount": 4656.22,
+            "carryOverDebt": 0.0
+          }
+        ],
+        "totalNet": 35078.72,
+        "totalDeductions": 1120.0,
+        "newCarryOverAdvances": []
+      }
+    },
+    {
+      "id": "FX-set-2026-saldo-devedor",
+      "nome": "Setembro/2026: vale maior que o bruto gera saldo devedor",
+      "period": "2026-09",
+      "settings": {
+        "legalReserveRate": 0.1,
+        "fatesRate": 0.05,
+        "otherFundsRate": 0,
+        "negativeBalancePolicy": "carry_over",
+        "includeMembersLeftInPeriod": true
+      },
+      "members": [
+        {
+          "id": "z1",
+          "name": "Zé Faltou",
+          "workedDays": 1,
+          "advances": [
+            {
+              "amount": 250.0,
+              "grantedOn": "2026-09-02"
+            }
+          ]
+        },
+        {
+          "id": "l1",
+          "name": "Lu Presente",
+          "workedDays": 10,
+          "advances": []
+        }
+      ],
+      "sales": [
+        {
+          "soldOn": "2026-09-10",
+          "buyer": "Comprador A",
+          "items": [
+            {
+              "material": "Papelão Ondulado",
+              "weightKg": 3000,
+              "pricePerKg": 1.0
+            }
+          ]
+        }
+      ],
+      "expenses": [
+        {
+          "incurredOn": "2026-09-05",
+          "description": "Energia",
+          "amount": 500.0
+        }
+      ],
+      "espera": {
+        "grossRevenue": 3000.0,
+        "totalExpenses": 500.0,
+        "surplus": 2500.0,
+        "legalReserveAmount": 250.0,
+        "fatesAmount": 125.0,
+        "otherFundsAmount": 0.0,
+        "distributableSurplus": 2125.0,
+        "totalWorkedDays": 11,
+        "dayValue": 193.18,
+        "distributedTotal": 2124.98,
+        "roundingResidual": 0.02,
+        "items": [
+          {
+            "member": "z1",
+            "workedDays": 1,
+            "grossAmount": 193.18,
+            "deductionsAmount": 250.0,
+            "netAmount": 0.0,
+            "carryOverDebt": 56.82
+          },
+          {
+            "member": "l1",
+            "workedDays": 10,
+            "grossAmount": 1931.8,
+            "deductionsAmount": 0.0,
+            "netAmount": 1931.8,
+            "carryOverDebt": 0.0
+          }
+        ],
+        "totalNet": 1931.8,
+        "totalDeductions": 250.0,
+        "newCarryOverAdvances": [
+          {
+            "member": "z1",
+            "kind": "carry_over",
+            "amount": 56.82,
+            "grantedOn": "2026-10-01",
+            "status": "pending"
+          }
+        ]
+      }
+    },
+    {
+      "id": "FX-set-2026-saldo-devedor-perdoa",
+      "nome": "Mesmo cenário com política forgive",
+      "period": "2026-09",
+      "herda_de": "FX-set-2026-saldo-devedor",
+      "settings": {
+        "legalReserveRate": 0.1,
+        "fatesRate": 0.05,
+        "otherFundsRate": 0,
+        "negativeBalancePolicy": "forgive",
+        "includeMembersLeftInPeriod": true
+      },
+      "espera": {
+        "dayValue": 193.18,
+        "items": [
+          {
+            "member": "z1",
+            "workedDays": 1,
+            "grossAmount": 193.18,
+            "deductionsAmount": 250.0,
+            "netAmount": 0.0,
+            "carryOverDebt": 0.0
+          },
+          {
+            "member": "l1",
+            "workedDays": 10,
+            "grossAmount": 1931.8,
+            "deductionsAmount": 0.0,
+            "netAmount": 1931.8,
+            "carryOverDebt": 0.0
+          }
+        ],
+        "newCarryOverAdvances": []
+      }
+    },
+    {
+      "id": "FX-sem-sobra",
+      "nome": "Despesa maior que receita",
+      "period": "2026-07",
+      "settings": {
+        "legalReserveRate": 0.1,
+        "fatesRate": 0.05,
+        "otherFundsRate": 0,
+        "negativeBalancePolicy": "carry_over",
+        "includeMembersLeftInPeriod": true
+      },
+      "members": [
+        {
+          "id": "a",
+          "name": "A",
+          "workedDays": 10,
+          "advances": []
+        }
+      ],
+      "sales": [
+        {
+          "soldOn": "2026-07-10",
+          "buyer": "B",
+          "items": [
+            {
+              "material": "Vidro",
+              "weightKg": 1000,
+              "pricePerKg": 1.0
+            }
+          ]
+        }
+      ],
+      "expenses": [
+        {
+          "incurredOn": "2026-07-01",
+          "description": "Aluguel",
+          "amount": 1500.0
+        }
+      ],
+      "espera": {
+        "grossRevenue": 1000.0,
+        "totalExpenses": 1500.0,
+        "surplus": -500.0,
+        "erro": "ERR-PAYOUT-001"
+      }
+    },
+    {
+      "id": "FX-sem-presenca",
+      "nome": "Ninguém veio no mês",
+      "period": "2026-06",
+      "settings": {
+        "legalReserveRate": 0.1,
+        "fatesRate": 0.05,
+        "otherFundsRate": 0,
+        "negativeBalancePolicy": "carry_over",
+        "includeMembersLeftInPeriod": true
+      },
+      "members": [
+        {
+          "id": "a",
+          "name": "A",
+          "workedDays": 0,
+          "advances": []
+        }
+      ],
+      "sales": [
+        {
+          "soldOn": "2026-06-10",
+          "buyer": "B",
+          "items": [
+            {
+              "material": "Vidro",
+              "weightKg": 5000,
+              "pricePerKg": 1.0
+            }
+          ]
+        }
+      ],
+      "expenses": [],
+      "espera": {
+        "grossRevenue": 5000.0,
+        "totalExpenses": 0.0,
+        "surplus": 5000.0,
+        "totalWorkedDays": 0,
+        "erro": "ERR-PAYOUT-002"
+      }
+    }
+  ]
+}

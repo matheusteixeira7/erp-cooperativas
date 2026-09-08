@@ -1,0 +1,23 @@
+{
+  "id": "ARQ-infra", "nome": "Infra e ambientes", "status": "proposto",
+  "descricao": "Local com docker compose (existe). Produção sugerida: Vercel para o Next e Postgres gerenciado. O pdf sugeria Render + Vercel para a stack antiga.",
+  "origem": { "tipo": "repo", "ref": "docker-compose.yml, .gitignore (.vercel); pdf p.24" },
+  "refs": { "nf": ["NF-005", "NF-007"], "tarefas": ["TK-021"] },
+  "ambientes": [
+    { "nome": "local", "app": "pnpm dev (turbo)", "banco": "docker compose up -d postgres (Postgres 17, db erp_cooperativas)", "env": "apps/web/.env.local a partir de .env.example", "existe": true },
+    { "nome": "preview", "app": "Vercel preview por PR", "banco": "branch de banco (Neon) ou schema por PR", "existe": false },
+    { "nome": "producao", "app": "Vercel", "banco": "Neon ou Supabase Postgres (free tier serve para começar; backup diário automático)", "existe": false }
+  ],
+  "variaveis_ambiente": [
+    { "nome": "DATABASE_URL", "obrigatoria": true, "validada_em": "apps/web/env.ts", "existe": true },
+    { "nome": "AUTH_SECRET", "obrigatoria": true, "descricao": "Assinatura de cookie/sessão. Adicionar em env.ts.", "existe": false },
+    { "nome": "APP_TIMEZONE", "obrigatoria": false, "padrao": "America/Sao_Paulo", "existe": false }
+  ],
+  "passos_deploy": [
+    "Repositório no GitHub; Vercel importa apps/web como root do projeto (monorepo: Root Directory = apps/web, framework Next.js).",
+    "Criar Postgres gerenciado; copiar DATABASE_URL para Vercel (Production e Preview).",
+    "Rodar migrations no deploy: pnpm --filter web db:migrate como passo de build ou job separado.",
+    "Seed inicial (cooperativa + manager) via script uma vez.",
+    "Ligar backups e alertas de erro (Vercel logs ou Sentry, fase 2)."
+  ]
+}

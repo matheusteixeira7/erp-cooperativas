@@ -1,6 +1,6 @@
 {
   "nome": "ERP Cooperativas (Recicla ERP)",
-  "versao": "0.2.0",
+  "versao": "0.3.0",
   "atualizado_em": "2026-09-08",
   "descricao": "Spec executável para agentes de IA. ERP para cooperativas de trabalho de materiais recicláveis. Rateio de sobras por dias trabalhados, com fundos legais retidos antes da distribuição.",
   "fonte_primaria": {
@@ -11,24 +11,101 @@
     "nota": "Conversa com o Gemini. Prototipou Express + React/Vite. A stack real do repositório é outra (ver 70-arquitetura/stack.json)."
   },
   "decisoes": [
-    { "data": "2026-09-08", "id": "DEC-001", "decisao": "Spec em JSON, vários arquivos, índice na raiz.", "por": "Matheus" },
-    { "data": "2026-09-08", "id": "DEC-002", "decisao": "Fundos legais (Reserva Legal e FATES) calculados dentro do sistema, percentuais configuráveis por cooperativa.", "por": "Matheus", "afeta": ["RN-010", "EN-parametros-rateio", "UI-parametros"] },
-    { "data": "2026-09-08", "id": "DEC-003", "decisao": "Contratos de API descritos como procedures tRPC (stack real), não REST/OpenAPI. Rotas REST do PDF ficam só como referência histórica.", "por": "Claude (proposto)", "status": "proposto" },
-    { "data": "2026-09-08", "id": "DEC-004", "decisao": "Identificadores de código em inglês (tabelas, routers, tipos TS). Textos de UI, descrições e glossário em pt-BR. Mapa termo→código em 00-contexto/glossario.json.", "por": "Claude (proposto, segue docs/trpc.md)", "status": "proposto" },
-    { "data": "2026-09-08", "id": "DEC-005", "decisao": "Multi-cooperativa desde o início: toda tabela de negócio tem cooperative_id, vindo da sessão, nunca do cliente.", "por": "Claude (proposto, segue server/trpc/context.ts)", "status": "proposto" }
+    {
+      "data": "2026-09-08",
+      "id": "DEC-001",
+      "decisao": "Spec em JSON, vários arquivos, índice na raiz.",
+      "por": "Matheus"
+    },
+    {
+      "data": "2026-09-08",
+      "id": "DEC-002",
+      "decisao": "Fundos legais (Reserva Legal e FATES) calculados dentro do sistema, percentuais configuráveis por cooperativa.",
+      "por": "Matheus",
+      "afeta": [
+        "RN-010",
+        "EN-parametros-rateio",
+        "UI-parametros"
+      ]
+    },
+    {
+      "data": "2026-09-08",
+      "id": "DEC-003",
+      "decisao": "Contratos de API descritos como procedures tRPC (stack real), não REST/OpenAPI. Rotas REST do PDF ficam só como referência histórica.",
+      "por": "Matheus",
+      "status": "confirmado"
+    },
+    {
+      "data": "2026-09-08",
+      "id": "DEC-004",
+      "decisao": "Código 100% em inglês: tabelas, colunas, routers, procedures, tipos, variáveis, nomes de arquivo, comentários e mensagens de commit. Interface 100% em português: textos de tela, mensagens de erro ao usuário, e-mails, exportações. Descrições da spec e glossário em pt-BR. Mapa termo→código em 00-contexto/glossario.json.",
+      "por": "Matheus",
+      "status": "confirmado"
+    },
+    {
+      "data": "2026-09-08",
+      "id": "DEC-005",
+      "decisao": "Multi-cooperativa desde o início: toda tabela de negócio tem cooperative_id, vindo da sessão, nunca do cliente.",
+      "por": "Matheus",
+      "status": "confirmado"
+    }
   ],
   "convencoes": {
     "idioma_descricoes": "pt-BR",
-    "idioma_codigo": "en",
+    "idioma_codigo": "en (100%: identificadores, arquivos, comentários, commits)",
     "prefixos_id": {
-      "TP": "tipo primitivo", "EN": "entidade", "RN": "regra de negócio", "VL": "validação de campo",
-      "PL": "política de acesso", "FL": "fluxo/processo", "API": "procedure tRPC", "ERR": "erro",
-      "UI": "tela", "NF": "requisito não funcional", "TS": "teste de aceitação", "TK": "tarefa", "FX": "fixture de teste", "DEC": "decisão"
+      "TP": "tipo primitivo",
+      "EN": "entidade",
+      "RN": "regra de negócio",
+      "VL": "validação de campo",
+      "PL": "política de acesso",
+      "FL": "fluxo/processo",
+      "API": "procedure tRPC",
+      "ERR": "erro",
+      "UI": "tela",
+      "NF": "requisito não funcional",
+      "TS": "teste de aceitação",
+      "TK": "tarefa",
+      "FX": "fixture de teste",
+      "DEC": "decisão"
     },
-    "status": ["confirmado", "proposto", "pergunta-aberta", "fase-2"],
-    "origem_tipo": ["pdf", "complemento", "decisao", "repo"],
-    "campos_obrigatorios": ["id", "nome", "descricao", "status", "origem", "refs"],
-    "refs_chaves_validas": ["tipos", "entidades", "regras", "validacoes", "politicas", "fluxos", "api", "erros", "telas", "nf", "testes", "tarefas", "fixtures", "decisoes"]
+    "status": [
+      "confirmado",
+      "proposto",
+      "pergunta-aberta",
+      "fase-2"
+    ],
+    "origem_tipo": [
+      "pdf",
+      "complemento",
+      "decisao",
+      "repo"
+    ],
+    "campos_obrigatorios": [
+      "id",
+      "nome",
+      "descricao",
+      "status",
+      "origem",
+      "refs"
+    ],
+    "refs_chaves_validas": [
+      "tipos",
+      "entidades",
+      "regras",
+      "validacoes",
+      "politicas",
+      "fluxos",
+      "api",
+      "erros",
+      "telas",
+      "nf",
+      "testes",
+      "tarefas",
+      "fixtures",
+      "decisoes"
+    ],
+    "idioma_interface": "pt-BR (100%: textos de tela, erros ao usuário, exportações)"
   },
   "arquivos": [
     "00-contexto/dominio.json",
@@ -53,6 +130,12 @@
   ],
   "validacao": {
     "script": "python3 validar.py",
-    "checa": ["JSON válido", "campos obrigatórios", "IDs únicos", "toda ref aponta para ID existente", "números das fixtures batem com as fórmulas"]
+    "checa": [
+      "JSON válido",
+      "campos obrigatórios",
+      "IDs únicos",
+      "toda ref aponta para ID existente",
+      "números das fixtures batem com as fórmulas"
+    ]
   }
 }

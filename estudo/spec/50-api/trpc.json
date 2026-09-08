@@ -1,0 +1,1336 @@
+{
+  "descricao": "Contratos tRPC v11. Um router por domínio em apps/web/server/trpc/routers/<router>.ts, composto em root.ts. Todo input e output é zod. 'protected' = protectedProcedure; 'roles' vira middleware requireRole. Campos de input em camelCase; cooperativeId NUNCA é input (RN-027). Formato de dinheiro no wire: number com 2 casas.",
+  "convencoes": {
+    "nomes": "router plural em inglês; query = substantivo/adjetivo (list, byId, byDate, simulate); mutation = verbo (create, update, close).",
+    "paginacao": "cursor nullish + limit 1..100 (default 50) em toda list que pode crescer.",
+    "erros": "ver 50-api/erros.json; nunca Error genérico.",
+    "datas": "LocalDate 'YYYY-MM-DD'; Period 'YYYY-MM'; timestamps ISO com fuso.",
+    "rest_pdf": "Campo pdf_rota mostra a rota REST equivalente do protótipo. Só histórico.",
+    "idiomas": "Identificadores em inglês (DEC-004). O campo mensagem_pt em erros.json é o único texto que chega ao usuário e é sempre pt-BR."
+  },
+  "schemas_compartilhados": {
+    "Member": "{ id, name, cpfMasked, pixKey?(manager), phone?, admittedOn, leftOn?, active }",
+    "Attendance": "{ memberId, memberName, present, note? }",
+    "SaleItemInput": "{ materialTypeId, weightKg, pricePerKg, baleCount? }",
+    "Sale": "{ id, buyer:{id,name}, soldOn, totalAmount, totalWeightKg, items:[{ materialType:{id,name}, weightKg, pricePerKg, subtotal }], invoiceNumber?, createdAt }",
+    "Expense": "{ id, description, category?, amount, incurredOn, createdAt }",
+    "Advance": "{ id, member:{id,name}, kind, description, amount, grantedOn, status, deductedInPayoutId? }",
+    "PayoutSettings": "{ effectiveFrom, legalReserveRate, fatesRate, otherFundsRate, negativeBalancePolicy, includeMembersLeftInPeriod }",
+    "PayoutSummary": "{ period, grossRevenue, totalExpenses, surplus, legalReserveAmount, fatesAmount, otherFundsAmount, distributableSurplus, totalWorkedDays, dayValue, distributedTotal, roundingResidual, settings: PayoutSettings }",
+    "PayoutItem": "{ memberId, memberName, workedDays, grossAmount, deductionsAmount, netAmount, carryOverDebt, paidAt? }",
+    "PayoutResult": "{ summary: PayoutSummary, items: PayoutItem[] }",
+    "Payout": "PayoutResult & { id, status, closedAt, closedBy:{id,name}, reopenedAt?, reopenReason? }"
+  },
+  "routers": [
+    {
+      "router": "system",
+      "arquivo": "routers/system.ts",
+      "descricao": "Técnico. Já existe.",
+      "procedures": [
+        {
+          "id": "API-system-ping",
+          "nome": "system.ping",
+          "tipo": "query",
+          "acesso": "public",
+          "input": "void",
+          "output": "{ ok: true }",
+          "status": "confirmado",
+          "origem": {
+            "tipo": "repo",
+            "ref": "routers/system.ts"
+          },
+          "pdf_rota": "GET /health",
+          "refs": {},
+          "descricao": "Healthcheck."
+        }
+      ]
+    },
+    {
+      "router": "auth",
+      "arquivo": "routers/auth.ts",
+      "descricao": "Login e sessão. A sessão é resolvida em createTRPCContext a partir do cookie; routers nunca lêem header.",
+      "procedures": [
+        {
+          "id": "API-auth-login",
+          "nome": "auth.login",
+          "tipo": "mutation",
+          "acesso": "public",
+          "input": "{ email: Email, password: string(8..128) }",
+          "output": "{ user: { id, name, roles, cooperative:{id,name} } }",
+          "efeitos": [
+            "seta cookie httpOnly de sessão",
+            "audit login"
+          ],
+          "erros": [
+            "ERR-AUTH-003"
+          ],
+          "status": "proposto",
+          "origem": {
+            "tipo": "complemento",
+            "ref": "-"
+          },
+          "refs": {
+            "entidades": [
+              "EN-usuario"
+            ],
+            "erros": [
+              "ERR-AUTH-003"
+            ],
+            "telas": [
+              "UI-login"
+            ]
+          },
+          "descricao": "Rate limit 5/min por IP+email."
+        },
+        {
+          "id": "API-auth-session",
+          "nome": "auth.session",
+          "tipo": "query",
+          "acesso": "public",
+          "input": "void",
+          "output": "{ user } | null",
+          "status": "proposto",
+          "origem": {
+            "tipo": "complemento",
+            "ref": "-"
+          },
+          "refs": {
+            "entidades": [
+              "EN-usuario"
+            ],
+            "telas": [
+              "UI-shell"
+            ]
+          },
+          "descricao": "Quem está logado. Shell usa para montar menu por perfil."
+        },
+        {
+          "id": "API-auth-logout",
+          "nome": "auth.logout",
+          "tipo": "mutation",
+          "acesso": "protected",
+          "input": "void",
+          "output": "{ ok: true }",
+          "status": "proposto",
+          "origem": {
+            "tipo": "complemento",
+            "ref": "-"
+          },
+          "refs": {
+            "telas": [
+              "UI-shell"
+            ]
+          },
+          "descricao": "Limpa cookie."
+        }
+      ]
+    },
+    {
+      "router": "members",
+      "arquivo": "routers/members.ts",
+      "descricao": "Cooperados.",
+      "procedures": [
+        {
+          "id": "API-members-list",
+          "nome": "members.list",
+          "tipo": "query",
+          "acesso": "protected",
+          "roles": [
+            "manager",
+            "operator"
+          ],
+          "input": "{ activeOn?: LocalDate, includeInactive?: boolean=false, search?: string, cursor?: string|null, limit?: number=50 }",
+          "output": "{ items: Member[], nextCursor: string|null }",
+          "status": "confirmado",
+          "origem": {
+            "tipo": "pdf",
+            "ref": "p.6 'GET /api/cooperados' comentado"
+          },
+          "pdf_rota": "GET /api/cooperados",
+          "refs": {
+            "entidades": [
+              "EN-cooperado"
+            ],
+            "politicas": [
+              "PL-001",
+              "PL-005"
+            ],
+            "telas": [
+              "UI-chamada",
+              "UI-cooperados",
+              "UI-financeiro"
+            ]
+          },
+          "descricao": "CPF mascarado. activeOn filtra quem estava ativo naquela data (para a chamada)."
+        },
+        {
+          "id": "API-members-byId",
+          "nome": "members.byId",
+          "tipo": "query",
+          "acesso": "protected",
+          "roles": [
+            "manager"
+          ],
+          "input": "{ id: Id }",
+          "output": "Member & { cpf, pixKey, notes }",
+          "erros": [
+            "ERR-MEMBER-002"
+          ],
+          "status": "proposto",
+          "origem": {
+            "tipo": "complemento",
+            "ref": "-"
+          },
+          "refs": {
+            "entidades": [
+              "EN-cooperado"
+            ],
+            "politicas": [
+              "PL-005"
+            ],
+            "erros": [
+              "ERR-MEMBER-002"
+            ],
+            "telas": [
+              "UI-cooperados"
+            ]
+          },
+          "descricao": "Único lugar que devolve CPF completo."
+        },
+        {
+          "id": "API-members-create",
+          "nome": "members.create",
+          "tipo": "mutation",
+          "acesso": "protected",
+          "roles": [
+            "manager"
+          ],
+          "input": "{ name: Text, cpf: Cpf, pixKey?: PixKey, phone?: string, admittedOn?: LocalDate=today, notes?: string }",
+          "output": "Member",
+          "erros": [
+            "ERR-MEMBER-001",
+            "ERR-VAL-001"
+          ],
+          "status": "confirmado",
+          "origem": {
+            "tipo": "pdf",
+            "ref": "p.5 POST /api/cooperados"
+          },
+          "pdf_rota": "POST /api/cooperados",
+          "refs": {
+            "entidades": [
+              "EN-cooperado"
+            ],
+            "validacoes": [
+              "VL-001",
+              "VL-007",
+              "VL-008",
+              "VL-012"
+            ],
+            "politicas": [
+              "PL-003",
+              "PL-006"
+            ],
+            "erros": [
+              "ERR-MEMBER-001"
+            ],
+            "telas": [
+              "UI-cooperados"
+            ],
+            "testes": [
+              "TS-015"
+            ]
+          },
+          "descricao": "-"
+        },
+        {
+          "id": "API-members-update",
+          "nome": "members.update",
+          "tipo": "mutation",
+          "acesso": "protected",
+          "roles": [
+            "manager"
+          ],
+          "input": "{ id: Id, name?, pixKey?, phone?, notes? }",
+          "output": "Member",
+          "erros": [
+            "ERR-MEMBER-002"
+          ],
+          "status": "proposto",
+          "origem": {
+            "tipo": "complemento",
+            "ref": "-"
+          },
+          "refs": {
+            "entidades": [
+              "EN-cooperado"
+            ],
+            "politicas": [
+              "PL-003",
+              "PL-006"
+            ],
+            "telas": [
+              "UI-cooperados"
+            ]
+          },
+          "descricao": "CPF não se edita depois de criado (exclui e recria se errou antes de ter lançamentos)."
+        },
+        {
+          "id": "API-members-deactivate",
+          "nome": "members.deactivate",
+          "tipo": "mutation",
+          "acesso": "protected",
+          "roles": [
+            "manager"
+          ],
+          "input": "{ id: Id, leftOn: LocalDate, reason?: string }",
+          "output": "Member",
+          "erros": [
+            "ERR-MEMBER-002"
+          ],
+          "status": "proposto",
+          "origem": {
+            "tipo": "pdf",
+            "ref": "p.3 ativo BOOLEAN"
+          },
+          "refs": {
+            "entidades": [
+              "EN-cooperado"
+            ],
+            "validacoes": [
+              "VL-008"
+            ],
+            "politicas": [
+              "PL-003",
+              "PL-006"
+            ],
+            "regras": [
+              "RN-007"
+            ],
+            "telas": [
+              "UI-cooperados"
+            ]
+          },
+          "descricao": "Desligamento. leftOn ≥ admittedOn."
+        }
+      ]
+    },
+    {
+      "router": "attendance",
+      "arquivo": "routers/attendance.ts",
+      "descricao": "Chamada diária.",
+      "procedures": [
+        {
+          "id": "API-attendance-byDate",
+          "nome": "attendance.byDate",
+          "tipo": "query",
+          "acesso": "protected",
+          "roles": [
+            "manager",
+            "operator"
+          ],
+          "input": "{ date: LocalDate }",
+          "output": "{ date, periodClosed: boolean, entries: Attendance[] }",
+          "status": "proposto",
+          "origem": {
+            "tipo": "complemento",
+            "ref": "pdf mockava a lista (p.6)"
+          },
+          "refs": {
+            "entidades": [
+              "EN-presenca",
+              "EN-cooperado"
+            ],
+            "telas": [
+              "UI-chamada"
+            ]
+          },
+          "descricao": "Lista cooperados ativos na data com present (default false se sem registro). periodClosed permite a UI travar a tela."
+        },
+        {
+          "id": "API-attendance-saveDaily",
+          "nome": "attendance.saveDaily",
+          "tipo": "mutation",
+          "acesso": "protected",
+          "roles": [
+            "manager",
+            "operator"
+          ],
+          "input": "{ date: LocalDate, entries: [{ memberId: Id, present: boolean, note?: string }] (1..500, memberId único) }",
+          "output": "{ saved: number, presentCount: number }",
+          "erros": [
+            "ERR-PAYOUT-003",
+            "ERR-MEMBER-002",
+            "ERR-MEMBER-003",
+            "ERR-VAL-001"
+          ],
+          "status": "confirmado",
+          "origem": {
+            "tipo": "pdf",
+            "ref": "p.5, p.19"
+          },
+          "pdf_rota": "POST /api/presencas/chamada-diaria",
+          "refs": {
+            "entidades": [
+              "EN-presenca"
+            ],
+            "regras": [
+              "RN-011",
+              "RN-013",
+              "RN-014"
+            ],
+            "validacoes": [
+              "VL-006",
+              "VL-010"
+            ],
+            "politicas": [
+              "PL-006"
+            ],
+            "erros": [
+              "ERR-PAYOUT-003",
+              "ERR-MEMBER-002",
+              "ERR-MEMBER-003"
+            ],
+            "telas": [
+              "UI-chamada"
+            ],
+            "testes": [
+              "TS-010",
+              "TS-012"
+            ]
+          },
+          "descricao": "Upsert atômico em transação."
+        },
+        {
+          "id": "API-attendance-mine",
+          "nome": "attendance.mine",
+          "tipo": "query",
+          "acesso": "protected",
+          "roles": [
+            "member"
+          ],
+          "input": "{ period: Period }",
+          "output": "{ period, workedDays: number, days: [{ date, present }] }",
+          "status": "proposto",
+          "origem": {
+            "tipo": "complemento",
+            "ref": "-"
+          },
+          "refs": {
+            "entidades": [
+              "EN-presenca"
+            ],
+            "telas": [
+              "UI-extrato-cooperado"
+            ]
+          },
+          "descricao": "Cooperado vê os próprios dias. memberId vem de session.user.memberId."
+        }
+      ]
+    },
+    {
+      "router": "materialTypes",
+      "arquivo": "routers/material-types.ts",
+      "descricao": "Catálogo de materiais.",
+      "procedures": [
+        {
+          "id": "API-materialTypes-list",
+          "nome": "materialTypes.list",
+          "tipo": "query",
+          "acesso": "protected",
+          "roles": [
+            "manager",
+            "operator"
+          ],
+          "input": "{ includeInactive?: boolean=false }",
+          "output": "[{ id, name, category, active, sortOrder }]",
+          "status": "confirmado",
+          "origem": {
+            "tipo": "pdf",
+            "ref": "p.10 lista mockada"
+          },
+          "refs": {
+            "entidades": [
+              "EN-tipo-material"
+            ],
+            "telas": [
+              "UI-vendas"
+            ]
+          },
+          "descricao": "-"
+        },
+        {
+          "id": "API-materialTypes-create",
+          "nome": "materialTypes.create",
+          "tipo": "mutation",
+          "acesso": "protected",
+          "roles": [
+            "manager"
+          ],
+          "input": "{ name: Text, category: MaterialCategory }",
+          "output": "MaterialType",
+          "status": "proposto",
+          "origem": {
+            "tipo": "complemento",
+            "ref": "-"
+          },
+          "refs": {
+            "entidades": [
+              "EN-tipo-material"
+            ],
+            "politicas": [
+              "PL-006"
+            ]
+          },
+          "descricao": "-"
+        }
+      ]
+    },
+    {
+      "router": "buyers",
+      "arquivo": "routers/buyers.ts",
+      "descricao": "Compradores.",
+      "procedures": [
+        {
+          "id": "API-buyers-list",
+          "nome": "buyers.list",
+          "tipo": "query",
+          "acesso": "protected",
+          "roles": [
+            "manager",
+            "operator"
+          ],
+          "input": "{ search?: string, includeInactive?: boolean=false }",
+          "output": "[{ id, name, cnpj?, active }]",
+          "status": "proposto",
+          "origem": {
+            "tipo": "complemento",
+            "ref": "pdf texto livre"
+          },
+          "refs": {
+            "entidades": [
+              "EN-comprador"
+            ],
+            "telas": [
+              "UI-vendas"
+            ]
+          },
+          "descricao": "-"
+        },
+        {
+          "id": "API-buyers-create",
+          "nome": "buyers.create",
+          "tipo": "mutation",
+          "acesso": "protected",
+          "roles": [
+            "manager",
+            "operator"
+          ],
+          "input": "{ name: Text, cnpj?: string, contact?: string }",
+          "output": "Buyer",
+          "status": "proposto",
+          "origem": {
+            "tipo": "complemento",
+            "ref": "-"
+          },
+          "refs": {
+            "entidades": [
+              "EN-comprador"
+            ],
+            "validacoes": [
+              "VL-009"
+            ],
+            "politicas": [
+              "PL-006"
+            ],
+            "telas": [
+              "UI-vendas"
+            ]
+          },
+          "descricao": "Operador pode criar inline na tela de venda."
+        }
+      ]
+    },
+    {
+      "router": "sales",
+      "arquivo": "routers/sales.ts",
+      "descricao": "Vendas de material.",
+      "procedures": [
+        {
+          "id": "API-sales-create",
+          "nome": "sales.create",
+          "tipo": "mutation",
+          "acesso": "protected",
+          "roles": [
+            "manager",
+            "operator"
+          ],
+          "input": "{ buyerId: Id, soldOn: LocalDate, items: SaleItemInput[] (min 1), invoiceNumber?: string, note?: string }",
+          "output": "Sale",
+          "erros": [
+            "ERR-PAYOUT-003",
+            "ERR-SALE-001",
+            "ERR-SALE-002",
+            "ERR-VAL-001"
+          ],
+          "status": "confirmado",
+          "origem": {
+            "tipo": "pdf",
+            "ref": "p.5, p.19-20"
+          },
+          "pdf_rota": "POST /api/vendas",
+          "refs": {
+            "entidades": [
+              "EN-venda",
+              "EN-item-venda"
+            ],
+            "regras": [
+              "RN-011",
+              "RN-015",
+              "RN-016"
+            ],
+            "validacoes": [
+              "VL-002",
+              "VL-003",
+              "VL-006",
+              "VL-009"
+            ],
+            "politicas": [
+              "PL-006"
+            ],
+            "erros": [
+              "ERR-PAYOUT-003",
+              "ERR-SALE-001",
+              "ERR-SALE-002"
+            ],
+            "telas": [
+              "UI-vendas"
+            ],
+            "testes": [
+              "TS-011"
+            ]
+          },
+          "descricao": "Totais calculados no servidor. Transação."
+        },
+        {
+          "id": "API-sales-list",
+          "nome": "sales.list",
+          "tipo": "query",
+          "acesso": "protected",
+          "roles": [
+            "manager",
+            "operator"
+          ],
+          "input": "{ period?: Period, buyerId?: Id, cursor?: string|null, limit?: number=50 }",
+          "output": "{ items: Sale[], nextCursor, totals: { amount, weightKg } }",
+          "status": "proposto",
+          "origem": {
+            "tipo": "complemento",
+            "ref": "-"
+          },
+          "refs": {
+            "entidades": [
+              "EN-venda"
+            ],
+            "telas": [
+              "UI-vendas"
+            ]
+          },
+          "descricao": "Exclui deleted_at."
+        },
+        {
+          "id": "API-sales-delete",
+          "nome": "sales.delete",
+          "tipo": "mutation",
+          "acesso": "protected",
+          "roles": [
+            "manager"
+          ],
+          "input": "{ id: Id, reason?: string }",
+          "output": "{ ok: true }",
+          "erros": [
+            "ERR-PAYOUT-003",
+            "ERR-SALE-003"
+          ],
+          "status": "proposto",
+          "origem": {
+            "tipo": "complemento",
+            "ref": "pdf apagava local"
+          },
+          "refs": {
+            "entidades": [
+              "EN-venda"
+            ],
+            "regras": [
+              "RN-011",
+              "RN-022"
+            ],
+            "politicas": [
+              "PL-004",
+              "PL-006"
+            ],
+            "erros": [
+              "ERR-PAYOUT-003",
+              "ERR-SALE-003"
+            ],
+            "telas": [
+              "UI-vendas"
+            ]
+          },
+          "descricao": "Soft delete."
+        }
+      ]
+    },
+    {
+      "router": "expenses",
+      "arquivo": "routers/expenses.ts",
+      "descricao": "Despesas operacionais.",
+      "procedures": [
+        {
+          "id": "API-expenses-create",
+          "nome": "expenses.create",
+          "tipo": "mutation",
+          "acesso": "protected",
+          "roles": [
+            "manager",
+            "operator"
+          ],
+          "input": "{ description: Text, category?: string, amount: MoneyBrl(>0), incurredOn: LocalDate }",
+          "output": "Expense",
+          "erros": [
+            "ERR-PAYOUT-003",
+            "ERR-VAL-001"
+          ],
+          "status": "confirmado",
+          "origem": {
+            "tipo": "pdf",
+            "ref": "p.5 POST /api/despesas"
+          },
+          "pdf_rota": "POST /api/despesas",
+          "refs": {
+            "entidades": [
+              "EN-despesa"
+            ],
+            "regras": [
+              "RN-011"
+            ],
+            "validacoes": [
+              "VL-004",
+              "VL-006"
+            ],
+            "politicas": [
+              "PL-006"
+            ],
+            "erros": [
+              "ERR-PAYOUT-003"
+            ],
+            "telas": [
+              "UI-financeiro"
+            ]
+          },
+          "descricao": "-"
+        },
+        {
+          "id": "API-expenses-list",
+          "nome": "expenses.list",
+          "tipo": "query",
+          "acesso": "protected",
+          "roles": [
+            "manager",
+            "operator"
+          ],
+          "input": "{ period: Period, cursor?, limit? }",
+          "output": "{ items: Expense[], nextCursor, total: MoneyBrl }",
+          "status": "confirmado",
+          "origem": {
+            "tipo": "pdf",
+            "ref": "p.16 'Despesas do Mês Atual'"
+          },
+          "refs": {
+            "entidades": [
+              "EN-despesa"
+            ],
+            "telas": [
+              "UI-financeiro"
+            ]
+          },
+          "descricao": "-"
+        },
+        {
+          "id": "API-expenses-delete",
+          "nome": "expenses.delete",
+          "tipo": "mutation",
+          "acesso": "protected",
+          "roles": [
+            "manager"
+          ],
+          "input": "{ id: Id, reason?: string }",
+          "output": "{ ok: true }",
+          "erros": [
+            "ERR-PAYOUT-003",
+            "ERR-EXPENSE-001"
+          ],
+          "status": "proposto",
+          "origem": {
+            "tipo": "complemento",
+            "ref": "-"
+          },
+          "refs": {
+            "entidades": [
+              "EN-despesa"
+            ],
+            "regras": [
+              "RN-011",
+              "RN-022"
+            ],
+            "politicas": [
+              "PL-004",
+              "PL-006"
+            ],
+            "erros": [
+              "ERR-PAYOUT-003",
+              "ERR-EXPENSE-001"
+            ],
+            "telas": [
+              "UI-financeiro"
+            ]
+          },
+          "descricao": "Soft delete."
+        }
+      ]
+    },
+    {
+      "router": "advances",
+      "arquivo": "routers/advances.ts",
+      "descricao": "Vales e adiantamentos.",
+      "procedures": [
+        {
+          "id": "API-advances-create",
+          "nome": "advances.create",
+          "tipo": "mutation",
+          "acesso": "protected",
+          "roles": [
+            "manager",
+            "operator"
+          ],
+          "input": "{ memberId: Id, kind?: AdvanceKind=cash_advance, description: Text, amount: MoneyBrl(>0), grantedOn: LocalDate }",
+          "output": "Advance",
+          "erros": [
+            "ERR-PAYOUT-003",
+            "ERR-MEMBER-002",
+            "ERR-VAL-001"
+          ],
+          "status": "confirmado",
+          "origem": {
+            "tipo": "pdf",
+            "ref": "p.5 POST /api/adiantamentos"
+          },
+          "pdf_rota": "POST /api/adiantamentos",
+          "refs": {
+            "entidades": [
+              "EN-vale"
+            ],
+            "regras": [
+              "RN-011"
+            ],
+            "validacoes": [
+              "VL-005",
+              "VL-006"
+            ],
+            "politicas": [
+              "PL-006"
+            ],
+            "erros": [
+              "ERR-PAYOUT-003",
+              "ERR-MEMBER-002"
+            ],
+            "telas": [
+              "UI-financeiro"
+            ]
+          },
+          "descricao": "kind carry_over não pode ser criado manualmente."
+        },
+        {
+          "id": "API-advances-list",
+          "nome": "advances.list",
+          "tipo": "query",
+          "acesso": "protected",
+          "roles": [
+            "manager",
+            "operator"
+          ],
+          "input": "{ status?: AdvanceStatus=pending, memberId?: Id, period?: Period, cursor?, limit? }",
+          "output": "{ items: Advance[], nextCursor, total: MoneyBrl }",
+          "status": "confirmado",
+          "origem": {
+            "tipo": "pdf",
+            "ref": "p.18 'Vales Pendentes'"
+          },
+          "refs": {
+            "entidades": [
+              "EN-vale"
+            ],
+            "telas": [
+              "UI-financeiro"
+            ]
+          },
+          "descricao": "-"
+        },
+        {
+          "id": "API-advances-cancel",
+          "nome": "advances.cancel",
+          "tipo": "mutation",
+          "acesso": "protected",
+          "roles": [
+            "manager"
+          ],
+          "input": "{ id: Id, reason: string(min 3) }",
+          "output": "Advance",
+          "erros": [
+            "ERR-PAYOUT-003",
+            "ERR-ADVANCE-001",
+            "ERR-ADVANCE-002"
+          ],
+          "status": "proposto",
+          "origem": {
+            "tipo": "complemento",
+            "ref": "-"
+          },
+          "refs": {
+            "entidades": [
+              "EN-vale"
+            ],
+            "regras": [
+              "RN-011",
+              "RN-021"
+            ],
+            "politicas": [
+              "PL-004",
+              "PL-006"
+            ],
+            "erros": [
+              "ERR-ADVANCE-001",
+              "ERR-ADVANCE-002"
+            ],
+            "telas": [
+              "UI-financeiro"
+            ]
+          },
+          "descricao": "pending → cancelled."
+        }
+      ]
+    },
+    {
+      "router": "payoutSettings",
+      "arquivo": "routers/payout-settings.ts",
+      "descricao": "Parâmetros de rateio.",
+      "procedures": [
+        {
+          "id": "API-payoutSettings-get",
+          "nome": "payoutSettings.get",
+          "tipo": "query",
+          "acesso": "protected",
+          "roles": [
+            "manager"
+          ],
+          "input": "{ period?: Period=current }",
+          "output": "PayoutSettings & { isDefault: boolean, history: PayoutSettings[] }",
+          "status": "confirmado",
+          "origem": {
+            "tipo": "decisao",
+            "ref": "DEC-002"
+          },
+          "refs": {
+            "entidades": [
+              "EN-parametros-rateio"
+            ],
+            "regras": [
+              "RN-026"
+            ],
+            "telas": [
+              "UI-parametros"
+            ]
+          },
+          "descricao": "Vigente no período. isDefault = nenhuma linha gravada ainda."
+        },
+        {
+          "id": "API-payoutSettings-update",
+          "nome": "payoutSettings.update",
+          "tipo": "mutation",
+          "acesso": "protected",
+          "roles": [
+            "manager"
+          ],
+          "input": "{ effectiveFrom: Period, legalReserveRate: Fraction(≥0.10), fatesRate: Fraction(≥0.05), otherFundsRate: Fraction, negativeBalancePolicy: 'forgive'|'carry_over', includeMembersLeftInPeriod: boolean }",
+          "output": "PayoutSettings",
+          "erros": [
+            "ERR-SETTINGS-001",
+            "ERR-PAYOUT-003"
+          ],
+          "status": "confirmado",
+          "origem": {
+            "tipo": "decisao",
+            "ref": "DEC-002"
+          },
+          "refs": {
+            "entidades": [
+              "EN-parametros-rateio"
+            ],
+            "regras": [
+              "RN-010",
+              "RN-026"
+            ],
+            "validacoes": [
+              "VL-013"
+            ],
+            "politicas": [
+              "PL-006"
+            ],
+            "erros": [
+              "ERR-SETTINGS-001"
+            ],
+            "telas": [
+              "UI-parametros"
+            ]
+          },
+          "descricao": "Cria nova linha versionada. effectiveFrom não pode ser mês já fechado."
+        }
+      ]
+    },
+    {
+      "router": "payouts",
+      "arquivo": "routers/payouts.ts",
+      "descricao": "Rateio: simulação, fechamento, histórico, extrato. O cálculo mora em um módulo puro (packages/domain/payout/calculate.ts) sem acesso a banco, testado com as fixtures.",
+      "procedures": [
+        {
+          "id": "API-payouts-simulate",
+          "nome": "payouts.simulate",
+          "tipo": "query",
+          "acesso": "protected",
+          "roles": [
+            "manager"
+          ],
+          "input": "{ period: Period }",
+          "output": "PayoutResult & { periodClosed: boolean, warnings: string[] }",
+          "erros": [
+            "ERR-PAYOUT-001",
+            "ERR-PAYOUT-002",
+            "ERR-VAL-001"
+          ],
+          "status": "confirmado",
+          "origem": {
+            "tipo": "pdf",
+            "ref": "p.5 GET /api/rateio/simulacao"
+          },
+          "pdf_rota": "GET /api/rateio/simulacao?mes=8&ano=2026",
+          "refs": {
+            "entidades": [
+              "EN-fechamento"
+            ],
+            "regras": [
+              "RN-001",
+              "RN-002",
+              "RN-003",
+              "RN-004",
+              "RN-006",
+              "RN-007",
+              "RN-010",
+              "RN-012",
+              "RN-017",
+              "RN-020",
+              "RN-026"
+            ],
+            "validacoes": [
+              "VL-011"
+            ],
+            "erros": [
+              "ERR-PAYOUT-001",
+              "ERR-PAYOUT-002"
+            ],
+            "telas": [
+              "UI-fechamento"
+            ],
+            "testes": [
+              "TS-001",
+              "TS-002",
+              "TS-003",
+              "TS-004",
+              "TS-005",
+              "TS-006",
+              "TS-008",
+              "TS-009"
+            ]
+          },
+          "descricao": "Pura. warnings: ex. 'mês corrente ainda não terminou', 'cooperado X sem presença'."
+        },
+        {
+          "id": "API-payouts-close",
+          "nome": "payouts.close",
+          "tipo": "mutation",
+          "acesso": "protected",
+          "roles": [
+            "manager"
+          ],
+          "input": "{ period: Period, confirmDistributableSurplus: MoneyBrl }",
+          "output": "Payout",
+          "erros": [
+            "ERR-PAYOUT-001",
+            "ERR-PAYOUT-002",
+            "ERR-PAYOUT-004",
+            "ERR-PAYOUT-005"
+          ],
+          "status": "confirmado",
+          "origem": {
+            "tipo": "pdf",
+            "ref": "p.5 POST /api/rateio/fechar"
+          },
+          "pdf_rota": "POST /api/rateio/fechar",
+          "refs": {
+            "entidades": [
+              "EN-fechamento",
+              "EN-fechamento-item",
+              "EN-vale"
+            ],
+            "regras": [
+              "RN-008",
+              "RN-009",
+              "RN-018",
+              "RN-019",
+              "RN-025"
+            ],
+            "politicas": [
+              "PL-002",
+              "PL-006"
+            ],
+            "erros": [
+              "ERR-PAYOUT-001",
+              "ERR-PAYOUT-002",
+              "ERR-PAYOUT-004",
+              "ERR-PAYOUT-005"
+            ],
+            "fluxos": [
+              "FL-001"
+            ],
+            "telas": [
+              "UI-fechamento"
+            ],
+            "testes": [
+              "TS-007",
+              "TS-013",
+              "TS-014"
+            ]
+          },
+          "descricao": "confirmDistributableSurplus deve bater com o recalculado (evita fechar com dados que mudaram desde a simulação; se diferir, CONFLICT com o valor novo). Tudo em uma transação com lock por (cooperativeId, period)."
+        },
+        {
+          "id": "API-payouts-list",
+          "nome": "payouts.list",
+          "tipo": "query",
+          "acesso": "protected",
+          "roles": [
+            "manager"
+          ],
+          "input": "{ cursor?, limit?=24 }",
+          "output": "{ items: [{ id, period, status, distributableSurplus, dayValue, totalWorkedDays, closedAt }], nextCursor }",
+          "status": "proposto",
+          "origem": {
+            "tipo": "complemento",
+            "ref": "-"
+          },
+          "refs": {
+            "entidades": [
+              "EN-fechamento"
+            ],
+            "telas": [
+              "UI-historico-fechamentos"
+            ]
+          },
+          "descricao": "-"
+        },
+        {
+          "id": "API-payouts-byId",
+          "nome": "payouts.byId",
+          "tipo": "query",
+          "acesso": "protected",
+          "roles": [
+            "manager"
+          ],
+          "input": "{ id: Id }",
+          "output": "Payout",
+          "erros": [
+            "ERR-PAYOUT-006"
+          ],
+          "status": "proposto",
+          "origem": {
+            "tipo": "complemento",
+            "ref": "-"
+          },
+          "refs": {
+            "entidades": [
+              "EN-fechamento",
+              "EN-fechamento-item"
+            ],
+            "regras": [
+              "RN-025"
+            ],
+            "erros": [
+              "ERR-PAYOUT-006"
+            ],
+            "telas": [
+              "UI-historico-fechamentos"
+            ]
+          },
+          "descricao": "Lê snapshot. Não recalcula."
+        },
+        {
+          "id": "API-payouts-reopen",
+          "nome": "payouts.reopen",
+          "tipo": "mutation",
+          "acesso": "protected",
+          "roles": [
+            "manager"
+          ],
+          "input": "{ id: Id, reason: string(min 10) }",
+          "output": "Payout",
+          "erros": [
+            "ERR-PAYOUT-006",
+            "ERR-PAYOUT-007"
+          ],
+          "status": "proposto",
+          "origem": {
+            "tipo": "complemento",
+            "ref": "-"
+          },
+          "refs": {
+            "entidades": [
+              "EN-fechamento",
+              "EN-vale"
+            ],
+            "regras": [
+              "RN-023"
+            ],
+            "politicas": [
+              "PL-002",
+              "PL-006"
+            ],
+            "erros": [
+              "ERR-PAYOUT-006",
+              "ERR-PAYOUT-007"
+            ],
+            "fluxos": [
+              "FL-001"
+            ],
+            "telas": [
+              "UI-historico-fechamentos"
+            ]
+          },
+          "descricao": "-"
+        },
+        {
+          "id": "API-payouts-markPaid",
+          "nome": "payouts.markPaid",
+          "tipo": "mutation",
+          "acesso": "protected",
+          "roles": [
+            "manager"
+          ],
+          "input": "{ payoutId: Id, memberIds: Id[] (min 1), paidAt?: Timestamp=now }",
+          "output": "{ updated: number }",
+          "erros": [
+            "ERR-PAYOUT-006"
+          ],
+          "status": "proposto",
+          "origem": {
+            "tipo": "complemento",
+            "ref": "-"
+          },
+          "refs": {
+            "entidades": [
+              "EN-fechamento-item"
+            ],
+            "politicas": [
+              "PL-006"
+            ],
+            "fluxos": [
+              "FL-001"
+            ],
+            "telas": [
+              "UI-historico-fechamentos"
+            ]
+          },
+          "descricao": "Controle operacional de quem já recebeu o PIX."
+        },
+        {
+          "id": "API-payouts-memberStatement",
+          "nome": "payouts.memberStatement",
+          "tipo": "query",
+          "acesso": "protected",
+          "roles": [
+            "manager",
+            "member"
+          ],
+          "input": "{ payoutId?: Id, period?: Period, memberId?: Id }",
+          "output": "{ period, member:{id,name}, item: PayoutItem, summary: { dayValue, closedAt } } | null",
+          "erros": [
+            "ERR-PAYOUT-006",
+            "ERR-AUTH-002"
+          ],
+          "status": "proposto",
+          "origem": {
+            "tipo": "pdf",
+            "ref": "p.10 'Exportar Folha'"
+          },
+          "refs": {
+            "entidades": [
+              "EN-fechamento-item"
+            ],
+            "regras": [
+              "RN-025"
+            ],
+            "politicas": [
+              "PL-001",
+              "PL-005"
+            ],
+            "telas": [
+              "UI-extrato-cooperado",
+              "UI-historico-fechamentos"
+            ]
+          },
+          "descricao": "member: memberId é ignorado e forçado para session.user.memberId. manager: memberId obrigatório."
+        },
+        {
+          "id": "API-payouts-export",
+          "nome": "payouts.export",
+          "tipo": "query",
+          "acesso": "protected",
+          "roles": [
+            "manager"
+          ],
+          "input": "{ id: Id, format: 'csv'|'pdf' }",
+          "output": "{ filename, mimeType, base64 }",
+          "erros": [
+            "ERR-PAYOUT-006"
+          ],
+          "status": "proposto",
+          "origem": {
+            "tipo": "pdf",
+            "ref": "p.10 'Exportar Folha (PDF/Excel)'"
+          },
+          "refs": {
+            "entidades": [
+              "EN-fechamento"
+            ],
+            "politicas": [
+              "PL-005"
+            ],
+            "telas": [
+              "UI-historico-fechamentos",
+              "UI-fechamento"
+            ]
+          },
+          "descricao": "Alternativa: route handler /api/payouts/[id]/export para stream. Decidir na implementação."
+        }
+      ]
+    }
+  ]
+}

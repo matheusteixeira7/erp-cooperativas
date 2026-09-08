@@ -1,155 +1,899 @@
 {
+  "descricao": "Regras que um gestor da cooperativa reconhece. Cada uma tem fórmula ou condição, e pelo menos um exemplo numérico quando é cálculo. Fixtures completas em 80-testes/fixtures.json.",
   "regras": [
     {
       "id": "RN-001",
-      "nome": "Valor da diaria",
+      "nome": "Valor da diária",
       "categoria": "calculo",
-      "descricao": "O valor de 1 dia trabalhado e a sobra liquida do mes dividida pelo total de dias trabalhados por todos os cooperados.",
-      "formula": "valor_por_dia = sobra_liquida / total_dias_trabalhados_geral",
+      "descricao": "O valor de 1 dia trabalhado é a sobra distribuível do mês dividida pelo total de dias trabalhados por todos, arredondado PARA BAIXO em 2 casas.",
+      "formula": "day_value = floor2(distributable_surplus / total_worked_days)",
       "entradas": [
-        { "nome": "sobra_liquida", "tipo": "TP-DinheiroBRL", "vem_de": "RN-003" },
-        { "nome": "total_dias_trabalhados_geral", "tipo": "integer", "vem_de": "RN-005" }
+        {
+          "nome": "distributable_surplus",
+          "tipo": "TP-DinheiroBRL",
+          "vem_de": "RN-010"
+        },
+        {
+          "nome": "total_worked_days",
+          "tipo": "integer",
+          "vem_de": "RN-005"
+        }
       ],
-      "saida": { "nome": "valor_por_dia", "tipo": "TP-DinheiroBRL" },
-      "precondicoes": ["RN-004", "RN-006"],
+      "saida": {
+        "nome": "day_value",
+        "tipo": "TP-DinheiroBRL"
+      },
+      "precondicoes": [
+        "RN-004",
+        "RN-006"
+      ],
       "exemplos": [
-        { "dado": { "sobra_liquida": 36200.00, "total_dias_trabalhados_geral": 220 }, "espera": { "valor_por_dia": 164.55 }, "fonte": "pdf p.8" }
+        {
+          "dado": {
+            "distributable_surplus": 36200.0,
+            "total_worked_days": 144
+          },
+          "espera": {
+            "day_value": 251.38
+          },
+          "fixture": "FX-ago-2026-sem-fundos"
+        },
+        {
+          "dado": {
+            "distributable_surplus": 30770.0,
+            "total_worked_days": 144
+          },
+          "espera": {
+            "day_value": 213.68
+          },
+          "fixture": "FX-ago-2026-com-fundos"
+        }
       ],
+      "nota_pdf": "O pdf dividia a sobra inteira (sem fundos) e arredondava para cima (164.55), o que distribuía R$ 1,00 a mais que existia. Ver RN-012.",
       "status": "confirmado",
-      "origem": { "tipo": "pdf", "ref": "p.3 formula; p.4 codigo passo 5" },
-      "refs": { "entidades": ["EN-fechamento"], "api": ["API-rateio-simulacao", "API-rateio-fechar"], "telas": ["UI-fechamento"], "testes": ["TS-001"] }
+      "origem": {
+        "tipo": "pdf",
+        "ref": "p.3 fórmula; p.4 passo 5"
+      },
+      "refs": {
+        "entidades": [
+          "EN-fechamento"
+        ],
+        "regras": [
+          "RN-010",
+          "RN-012"
+        ],
+        "api": [
+          "API-payouts-simulate",
+          "API-payouts-close"
+        ],
+        "telas": [
+          "UI-fechamento"
+        ],
+        "testes": [
+          "TS-001",
+          "TS-009"
+        ],
+        "fixtures": [
+          "FX-ago-2026-sem-fundos",
+          "FX-ago-2026-com-fundos"
+        ]
+      }
     },
     {
       "id": "RN-002",
       "nome": "Rateio individual do cooperado",
       "categoria": "calculo",
-      "descricao": "Cada cooperado recebe seus dias trabalhados vezes o valor da diaria, menos vales e adiantamentos pendentes do mes.",
-      "formula": "bruto = dias_cooperado * valor_por_dia; liquido = max(0, bruto - descontos_pendentes)",
+      "descricao": "Cada cooperado recebe seus dias trabalhados vezes o valor da diária, menos vales pendentes. O líquido nunca fica negativo.",
+      "formula": "gross = worked_days × day_value; net = max(0, gross − deductions); carry_over_debt = max(0, deductions − gross)",
       "entradas": [
-        { "nome": "dias_cooperado", "tipo": "integer" },
-        { "nome": "valor_por_dia", "tipo": "TP-DinheiroBRL", "vem_de": "RN-001" },
-        { "nome": "descontos_pendentes", "tipo": "TP-DinheiroBRL", "vem_de": "RN-008" }
+        {
+          "nome": "worked_days",
+          "tipo": "integer"
+        },
+        {
+          "nome": "day_value",
+          "tipo": "TP-DinheiroBRL",
+          "vem_de": "RN-001"
+        },
+        {
+          "nome": "deductions",
+          "tipo": "TP-DinheiroBRL",
+          "vem_de": "RN-020"
+        }
       ],
-      "saida": { "bruto": "TP-DinheiroBRL", "liquido": "TP-DinheiroBRL" },
+      "saida": {
+        "gross": "TP-DinheiroBRL",
+        "net": "TP-DinheiroBRL",
+        "carry_over_debt": "TP-DinheiroBRL"
+      },
       "exemplos": [
-        { "dado": { "dias_cooperado": 22, "valor_por_dia": 164.55, "descontos_pendentes": 200.00 }, "espera": { "bruto": 3620.10, "liquido": 3420.10 }, "fonte": "pdf p.8 Ana Maria Silva" },
-        { "dado": { "dias_cooperado": 1, "valor_por_dia": 100.00, "descontos_pendentes": 250.00 }, "espera": { "bruto": 100.00, "liquido": 0.00 }, "nota": "ver RN-009 sobre o que acontece com os R$ 150 restantes" }
+        {
+          "dado": {
+            "worked_days": 22,
+            "day_value": 213.68,
+            "deductions": 200.0
+          },
+          "espera": {
+            "gross": 4700.96,
+            "net": 4500.96,
+            "carry_over_debt": 0
+          },
+          "fixture": "FX-ago-2026-com-fundos",
+          "cooperado": "Ana Maria Silva"
+        },
+        {
+          "dado": {
+            "worked_days": 1,
+            "day_value": 213.68,
+            "deductions": 250.0
+          },
+          "espera": {
+            "gross": 213.68,
+            "net": 0,
+            "carry_over_debt": 36.32
+          },
+          "nota": "RN-009 decide o destino dos 36,32"
+        }
       ],
       "status": "confirmado",
-      "origem": { "tipo": "pdf", "ref": "p.3 formula; p.5 codigo passo 7" },
-      "refs": { "entidades": ["EN-fechamento", "EN-vale"], "api": ["API-rateio-simulacao"], "telas": ["UI-fechamento"], "testes": ["TS-002"] }
+      "origem": {
+        "tipo": "pdf",
+        "ref": "p.3 fórmula; p.5 passo 7"
+      },
+      "refs": {
+        "entidades": [
+          "EN-fechamento-item",
+          "EN-vale"
+        ],
+        "regras": [
+          "RN-009",
+          "RN-020"
+        ],
+        "api": [
+          "API-payouts-simulate"
+        ],
+        "telas": [
+          "UI-fechamento",
+          "UI-extrato-cooperado"
+        ],
+        "testes": [
+          "TS-002",
+          "TS-014"
+        ]
+      }
     },
     {
       "id": "RN-003",
-      "nome": "Sobra liquida do mes",
+      "nome": "Sobra do mês",
       "categoria": "calculo",
-      "descricao": "Receita bruta de vendas do mes menos despesas operacionais do mes.",
-      "formula": "sobra_liquida = receita_bruta - despesas_totais",
-      "criterio_periodo": "vendas por data_venda; despesas por data_despesa (competencia, nao caixa)",
+      "descricao": "Receita bruta de vendas do mês menos despesas operacionais do mês. Regime de competência: vale a data do lançamento. Lançamentos com deleted_at não contam.",
+      "formula": "surplus = Σ sales.total_amount (sold_on in period, not deleted) − Σ expenses.amount (incurred_on in period, not deleted)",
       "exemplos": [
-        { "dado": { "receita_bruta": 48500.00, "despesas_totais": 12300.00 }, "espera": { "sobra_liquida": 36200.00 }, "fonte": "pdf p.8" }
+        {
+          "dado": {
+            "gross_revenue": 48500.0,
+            "total_expenses": 12300.0
+          },
+          "espera": {
+            "surplus": 36200.0
+          },
+          "fixture": "FX-ago-2026-com-fundos"
+        }
       ],
       "status": "confirmado",
-      "origem": { "tipo": "pdf", "ref": "p.4 codigo passos 1-3" },
-      "refs": { "entidades": ["EN-venda", "EN-despesa", "EN-fechamento"], "regras": ["RN-011"], "testes": ["TS-003"] }
+      "origem": {
+        "tipo": "pdf",
+        "ref": "p.4 passos 1-3"
+      },
+      "refs": {
+        "entidades": [
+          "EN-venda",
+          "EN-despesa",
+          "EN-fechamento"
+        ],
+        "regras": [
+          "RN-022"
+        ],
+        "testes": [
+          "TS-003"
+        ]
+      }
     },
     {
       "id": "RN-004",
       "nome": "Sem sobra, sem rateio",
       "categoria": "bloqueio",
-      "descricao": "Se a sobra liquida for zero ou negativa, o fechamento e bloqueado.",
-      "condicao": "sobra_liquida <= 0",
-      "erro": "ERR-RATEIO-001",
+      "descricao": "Se a sobra for zero ou negativa, simulação e fechamento retornam erro. O mês fica aberto até o gestor decidir (lançar receita faltante ou registrar prejuízo fora do sistema).",
+      "condicao": "surplus <= 0",
+      "erro": "ERR-PAYOUT-001",
       "status": "confirmado",
-      "origem": { "tipo": "pdf", "ref": "p.5 throw 'A sobra liquida e menor ou igual a zero'" },
-      "refs": { "api": ["API-rateio-simulacao", "API-rateio-fechar"], "testes": ["TS-004"] }
+      "origem": {
+        "tipo": "pdf",
+        "ref": "p.5 throw sobra <= 0"
+      },
+      "refs": {
+        "api": [
+          "API-payouts-simulate",
+          "API-payouts-close"
+        ],
+        "erros": [
+          "ERR-PAYOUT-001"
+        ],
+        "testes": [
+          "TS-004"
+        ]
+      }
     },
     {
       "id": "RN-005",
       "nome": "Total de dias trabalhados",
       "categoria": "calculo",
-      "descricao": "Soma de todas as presencas com presente = true no mes. Cada cooperado conta no maximo 1 por dia.",
-      "formula": "total = count(presencas where presente and mes(data) = mes)",
+      "descricao": "Soma de presenças com present = true no mês, de cooperados elegíveis (RN-007).",
+      "formula": "total_worked_days = count(attendances where present and date in period and member elegível)",
       "status": "confirmado",
-      "origem": { "tipo": "pdf", "ref": "p.5 passo 4; p.3 UNIQUE(cooperado_id, data)" },
-      "refs": { "entidades": ["EN-presenca"], "regras": ["RN-007"] }
+      "origem": {
+        "tipo": "pdf",
+        "ref": "p.5 passo 4"
+      },
+      "refs": {
+        "entidades": [
+          "EN-presenca"
+        ],
+        "regras": [
+          "RN-007",
+          "RN-013"
+        ]
+      }
     },
     {
       "id": "RN-006",
-      "nome": "Sem presenca, sem rateio",
+      "nome": "Sem presença, sem rateio",
       "categoria": "bloqueio",
-      "descricao": "Se nao houver nenhuma presenca no mes, o fechamento e bloqueado.",
-      "condicao": "total_dias_trabalhados_geral == 0",
-      "erro": "ERR-RATEIO-002",
+      "descricao": "Se não houver nenhuma presença no mês, simulação e fechamento retornam erro.",
+      "condicao": "total_worked_days == 0",
+      "erro": "ERR-PAYOUT-002",
       "status": "confirmado",
-      "origem": { "tipo": "pdf", "ref": "p.5 throw 'Nenhuma presenca registrada'" },
-      "refs": { "api": ["API-rateio-simulacao"], "testes": ["TS-005"] }
+      "origem": {
+        "tipo": "pdf",
+        "ref": "p.5 throw nenhuma presença"
+      },
+      "refs": {
+        "api": [
+          "API-payouts-simulate",
+          "API-payouts-close"
+        ],
+        "erros": [
+          "ERR-PAYOUT-002"
+        ],
+        "testes": [
+          "TS-005"
+        ]
+      }
     },
     {
       "id": "RN-007",
-      "nome": "So cooperado ativo entra no rateio",
+      "nome": "Elegibilidade do cooperado no mês",
       "categoria": "elegibilidade",
-      "descricao": "Cooperados com ativo = false nao aparecem no demonstrativo.",
-      "status": "pergunta-aberta",
-      "pergunta": "Cooperado desligado no dia 20 trabalhou 15 dias. Recebe pelos 15 dias ou perde? O codigo do pdf faz ele perder.",
-      "origem": { "tipo": "pdf", "ref": "p.5 WHERE c.ativo = TRUE" },
-      "refs": { "entidades": ["EN-cooperado"], "testes": ["TS-006"] }
+      "descricao": "Entra no rateio quem tem pelo menos 1 presença no mês. Cooperado desligado dentro do mês recebe pelos dias que trabalhou se include_members_left_in_period = true (padrão). Cooperado ativo sem presença aparece com 0 dias e líquido 0 (para o gestor ver quem faltou o mês todo).",
+      "condicao": "worked_days > 0 OR (left_on IS NULL)",
+      "nota_pdf": "O pdf filtrava WHERE ativo = TRUE, fazendo o desligado perder os dias.",
+      "status": "proposto",
+      "origem": {
+        "tipo": "complemento",
+        "ref": "pdf p.5"
+      },
+      "refs": {
+        "entidades": [
+          "EN-cooperado",
+          "EN-parametros-rateio"
+        ],
+        "testes": [
+          "TS-006"
+        ]
+      }
     },
     {
       "id": "RN-008",
       "nome": "Vales descontados no fechamento",
       "categoria": "efeito",
-      "descricao": "Ao fechar o mes, todos os vales pendentes do mes viram descontados (pago_ou_descontado = true). A simulacao nao altera nada.",
+      "descricao": "Ao fechar, todo vale considerado no cálculo passa de pending para deducted, com deducted_in_payout_id apontando o fechamento. Tudo na mesma transação. A simulação não muda nada.",
       "status": "confirmado",
-      "origem": { "tipo": "pdf", "ref": "p.5 tabela de rotas: 'marca vales como quitados'" },
-      "refs": { "entidades": ["EN-vale", "EN-fechamento"], "api": ["API-rateio-fechar"], "fluxos": ["FL-001"], "testes": ["TS-007"] }
+      "origem": {
+        "tipo": "pdf",
+        "ref": "p.5 'marca vales como quitados'"
+      },
+      "refs": {
+        "entidades": [
+          "EN-vale",
+          "EN-fechamento"
+        ],
+        "regras": [
+          "RN-017",
+          "RN-020"
+        ],
+        "api": [
+          "API-payouts-close"
+        ],
+        "fluxos": [
+          "FL-001",
+          "FL-005"
+        ],
+        "testes": [
+          "TS-007"
+        ]
+      }
     },
     {
       "id": "RN-009",
       "nome": "Vale maior que o bruto",
-      "categoria": "decisao",
-      "descricao": "Quando descontos > bruto, o liquido e zero. O que acontece com a diferenca?",
-      "opcoes": [
-        { "id": "A", "nome": "perdoa", "descricao": "diferenca e absorvida pela cooperativa (comportamento atual do pdf)" },
-        { "id": "B", "nome": "saldo devedor", "descricao": "diferenca vira vale pendente no mes seguinte (recomendado)" }
+      "categoria": "decisao-parametrizada",
+      "descricao": "Quando deductions > gross, net = 0. A diferença segue a política da cooperativa: carry_over (padrão) cria um vale kind = carry_over, pending, na competência seguinte, apontando origin_advance_id; forgive descarta.",
+      "parametro": "payout_settings.negative_balance_policy",
+      "exemplos": [
+        {
+          "dado": {
+            "gross": 213.68,
+            "deductions": 250.0,
+            "policy": "carry_over"
+          },
+          "espera": {
+            "net": 0,
+            "novo_vale": {
+              "kind": "carry_over",
+              "amount": 36.32,
+              "granted_on": "primeiro dia do mês seguinte"
+            }
+          }
+        },
+        {
+          "dado": {
+            "gross": 213.68,
+            "deductions": 250.0,
+            "policy": "forgive"
+          },
+          "espera": {
+            "net": 0,
+            "novo_vale": null
+          }
+        }
       ],
-      "status": "pergunta-aberta",
-      "origem": { "tipo": "complemento", "ref": "pdf p.5 valorLiquido < 0 ? 0 : valorLiquido" },
-      "refs": { "regras": ["RN-002"], "entidades": ["EN-vale"] }
+      "status": "proposto",
+      "origem": {
+        "tipo": "complemento",
+        "ref": "pdf p.5 zera e perde"
+      },
+      "refs": {
+        "entidades": [
+          "EN-vale",
+          "EN-fechamento-item",
+          "EN-parametros-rateio"
+        ],
+        "regras": [
+          "RN-002"
+        ],
+        "testes": [
+          "TS-014"
+        ]
+      }
     },
     {
       "id": "RN-010",
       "nome": "Fundos legais antes do rateio",
       "categoria": "regulatorio",
-      "descricao": "Lei 5.764/71 art. 28: Reserva Legal (minimo 10% das sobras) e FATES (minimo 5%) sao retidos antes de distribuir. A formula do pdf distribui 100%.",
-      "formula_proposta": "sobra_distribuivel = sobra_liquida * (1 - reserva_legal - fates)",
-      "parametros": [
-        { "nome": "reserva_legal", "tipo": "TP-Percentual", "padrao": 0.10 },
-        { "nome": "fates", "tipo": "TP-Percentual", "padrao": 0.05 }
+      "descricao": "Antes de dividir, retira-se da sobra a Reserva Legal (mín. 10%), o FATES (mín. 5%) e outros fundos estatutários. Percentuais vêm dos parâmetros vigentes no mês (RN-026). Cada fundo é arredondado half-even em 2 casas.",
+      "formula": "legal_reserve = round2(surplus × legal_reserve_rate); fates = round2(surplus × fates_rate); other = round2(surplus × other_funds_rate); distributable_surplus = surplus − legal_reserve − fates − other",
+      "exemplos": [
+        {
+          "dado": {
+            "surplus": 36200.0,
+            "legal_reserve_rate": 0.1,
+            "fates_rate": 0.05,
+            "other_funds_rate": 0
+          },
+          "espera": {
+            "legal_reserve": 3620.0,
+            "fates": 1810.0,
+            "other": 0,
+            "distributable_surplus": 30770.0
+          },
+          "fixture": "FX-ago-2026-com-fundos"
+        }
       ],
-      "status": "pergunta-aberta",
-      "pergunta": "Confirmar com o contador da cooperativa. Percentuais podem ser maiores por estatuto.",
-      "origem": { "tipo": "complemento", "ref": "Lei 5.764/71 art. 28" },
-      "refs": { "regras": ["RN-001"], "entidades": ["EN-fechamento"] }
+      "base_legal": "Lei 5.764/71 art. 28",
+      "status": "confirmado",
+      "origem": {
+        "tipo": "decisao",
+        "ref": "DEC-002 (2026-09-08)"
+      },
+      "refs": {
+        "entidades": [
+          "EN-parametros-rateio",
+          "EN-fechamento"
+        ],
+        "regras": [
+          "RN-001",
+          "RN-026"
+        ],
+        "validacoes": [
+          "VL-013"
+        ],
+        "telas": [
+          "UI-parametros",
+          "UI-fechamento"
+        ],
+        "testes": [
+          "TS-009"
+        ],
+        "decisoes": [
+          "DEC-002"
+        ]
+      }
     },
     {
       "id": "RN-011",
-      "nome": "Mes fechado e imutavel",
+      "nome": "Mês fechado é imutável",
       "categoria": "integridade",
-      "descricao": "Depois de fechado, nao se pode inserir/alterar presenca, venda, despesa ou vale com data dentro do mes. Reabertura so por gestor, com motivo, gerando log.",
-      "erro": "ERR-RATEIO-003",
+      "descricao": "Existindo fechamento closed para o período, nenhuma presença, venda, despesa ou vale com data dentro dele pode ser criado, alterado ou excluído. Para mexer, o gestor reabre (RN-023).",
+      "condicao": "exists payout(period = month(date), status = closed)",
+      "erro": "ERR-PAYOUT-003",
       "status": "proposto",
-      "origem": { "tipo": "complemento", "ref": "pdf nao trata; tela permite data retroativa (p.7)" },
-      "refs": { "entidades": ["EN-fechamento", "EN-presenca", "EN-venda", "EN-despesa", "EN-vale"], "fluxos": ["FL-001"], "politicas": ["PL-002"] }
+      "origem": {
+        "tipo": "complemento",
+        "ref": "pdf permite data retroativa sem checar (p.7)"
+      },
+      "refs": {
+        "entidades": [
+          "EN-fechamento",
+          "EN-presenca",
+          "EN-venda",
+          "EN-despesa",
+          "EN-vale"
+        ],
+        "regras": [
+          "RN-023"
+        ],
+        "erros": [
+          "ERR-PAYOUT-003"
+        ],
+        "api": [
+          "API-attendance-saveDaily",
+          "API-sales-create",
+          "API-sales-delete",
+          "API-expenses-create",
+          "API-expenses-delete",
+          "API-advances-create",
+          "API-advances-cancel"
+        ],
+        "testes": [
+          "TS-012"
+        ]
+      }
     },
     {
       "id": "RN-012",
-      "nome": "Arredondamento do rateio",
+      "nome": "Arredondamento nunca distribui mais do que existe",
       "categoria": "calculo",
-      "descricao": "valor_por_dia arredondado a 2 casas gera diferenca entre soma dos brutos e sobra distribuivel. A diferenca (centavos) fica para a cooperativa.",
+      "descricao": "day_value é truncado (floor) em 2 casas. Assim Σ gross ≤ distributable_surplus sempre. A diferença (rounding_residual) fica registrada no fechamento e permanece com a cooperativa.",
+      "formula": "rounding_residual = distributable_surplus − Σ items.gross_amount; invariante: 0 ≤ rounding_residual < total_worked_days × 0.01",
+      "exemplos": [
+        {
+          "dado": {
+            "distributable_surplus": 30770.0,
+            "total_worked_days": 144
+          },
+          "espera": {
+            "day_value": 213.68,
+            "distributed_total": 30769.92,
+            "rounding_residual": 0.08
+          },
+          "fixture": "FX-ago-2026-com-fundos"
+        },
+        {
+          "dado": {
+            "distributable_surplus": 36200.0,
+            "total_worked_days": 220
+          },
+          "espera": {
+            "day_value": 164.54,
+            "distributed_total": 36198.8,
+            "rounding_residual": 1.2
+          },
+          "nota": "Cenário do pdf p.8. Lá saía 164.55 e distribuía 36201.00."
+        }
+      ],
       "status": "proposto",
-      "origem": { "tipo": "complemento", "ref": "pdf p.8: 220 x 164.55 = 36201.00, nao 36200.00" },
-      "refs": { "regras": ["RN-001", "RN-002"], "testes": ["TS-008"] }
+      "origem": {
+        "tipo": "complemento",
+        "ref": "pdf p.8 220 × 164.55 = 36201 > 36200"
+      },
+      "refs": {
+        "entidades": [
+          "EN-fechamento"
+        ],
+        "regras": [
+          "RN-001"
+        ],
+        "testes": [
+          "TS-008"
+        ]
+      }
+    },
+    {
+      "id": "RN-013",
+      "nome": "Uma presença por cooperado por dia",
+      "categoria": "integridade",
+      "descricao": "Salvar chamada para um dia que já tem registro atualiza o registro (upsert). Repetir o mesmo envio não cria duplicata nem muda o resultado.",
+      "status": "confirmado",
+      "origem": {
+        "tipo": "pdf",
+        "ref": "p.3 UNIQUE(cooperado_id, data); p.19 ON CONFLICT DO UPDATE"
+      },
+      "refs": {
+        "entidades": [
+          "EN-presenca"
+        ],
+        "api": [
+          "API-attendance-saveDaily"
+        ],
+        "testes": [
+          "TS-010"
+        ]
+      }
+    },
+    {
+      "id": "RN-014",
+      "nome": "Chamada é atômica",
+      "categoria": "integridade",
+      "descricao": "A lista do dia é gravada inteira ou nada. Um cooperado inválido na lista rejeita a chamada toda.",
+      "status": "confirmado",
+      "origem": {
+        "tipo": "pdf",
+        "ref": "p.19 BEGIN/COMMIT/ROLLBACK"
+      },
+      "refs": {
+        "entidades": [
+          "EN-presenca"
+        ],
+        "api": [
+          "API-attendance-saveDaily"
+        ],
+        "validacoes": [
+          "VL-010"
+        ],
+        "testes": [
+          "TS-010"
+        ]
+      }
+    },
+    {
+      "id": "RN-015",
+      "nome": "Total da venda é calculado no servidor",
+      "categoria": "integridade",
+      "descricao": "subtotal = round2(weight_kg × price_per_kg); total_amount = Σ subtotal; total_weight_kg = Σ weight_kg. O cliente não envia totais; se enviar, são ignorados.",
+      "exemplos": [
+        {
+          "dado": {
+            "itens": [
+              {
+                "weight_kg": 450,
+                "price_per_kg": 3.2
+              },
+              {
+                "weight_kg": 1200,
+                "price_per_kg": 0.65
+              }
+            ]
+          },
+          "espera": {
+            "subtotais": [
+              1440.0,
+              780.0
+            ],
+            "total_amount": 2220.0,
+            "total_weight_kg": 1650
+          },
+          "fonte": "pdf p.11"
+        }
+      ],
+      "nota_pdf": "O pdf aceitava valor_total do front (p.20).",
+      "status": "proposto",
+      "origem": {
+        "tipo": "complemento",
+        "ref": "pdf p.20"
+      },
+      "refs": {
+        "entidades": [
+          "EN-venda",
+          "EN-item-venda"
+        ],
+        "api": [
+          "API-sales-create"
+        ],
+        "testes": [
+          "TS-011"
+        ]
+      }
+    },
+    {
+      "id": "RN-016",
+      "nome": "Venda tem pelo menos um item",
+      "categoria": "validacao-de-negocio",
+      "condicao": "items.length == 0",
+      "erro": "ERR-SALE-001",
+      "status": "confirmado",
+      "origem": {
+        "tipo": "pdf",
+        "ref": "p.11 'adicione ao menos um item'"
+      },
+      "refs": {
+        "entidades": [
+          "EN-venda"
+        ],
+        "api": [
+          "API-sales-create"
+        ],
+        "erros": [
+          "ERR-SALE-001"
+        ]
+      },
+      "descricao": "Não existe venda sem material. O servidor rejeita lista de itens vazia."
+    },
+    {
+      "id": "RN-017",
+      "nome": "Simulação não altera estado",
+      "categoria": "integridade",
+      "descricao": "payouts.simulate é uma query pura. Pode rodar mil vezes. Retorna o mesmo shape que o fechamento gravaria.",
+      "status": "confirmado",
+      "origem": {
+        "tipo": "pdf",
+        "ref": "p.5 GET /api/rateio/simulacao"
+      },
+      "refs": {
+        "api": [
+          "API-payouts-simulate"
+        ],
+        "regras": [
+          "RN-008"
+        ]
+      }
+    },
+    {
+      "id": "RN-018",
+      "nome": "Um fechamento por mês",
+      "categoria": "integridade",
+      "descricao": "Fechar um mês que já está closed retorna erro. Reaberto pode ser fechado de novo (gera novo registro).",
+      "condicao": "exists payout(period, status = closed)",
+      "erro": "ERR-PAYOUT-004",
+      "status": "proposto",
+      "origem": {
+        "tipo": "complemento",
+        "ref": "pdf não checava"
+      },
+      "refs": {
+        "entidades": [
+          "EN-fechamento"
+        ],
+        "api": [
+          "API-payouts-close"
+        ],
+        "erros": [
+          "ERR-PAYOUT-004"
+        ],
+        "testes": [
+          "TS-013"
+        ]
+      }
+    },
+    {
+      "id": "RN-019",
+      "nome": "Não se fecha mês futuro",
+      "categoria": "bloqueio",
+      "descricao": "period deve ser ≤ mês corrente (fuso da cooperativa). Fechar o mês corrente antes do último dia é permitido, mas a UI exige confirmação extra.",
+      "condicao": "period > current_month",
+      "erro": "ERR-PAYOUT-005",
+      "status": "proposto",
+      "origem": {
+        "tipo": "complemento",
+        "ref": "-"
+      },
+      "refs": {
+        "api": [
+          "API-payouts-close"
+        ],
+        "erros": [
+          "ERR-PAYOUT-005"
+        ],
+        "telas": [
+          "UI-fechamento"
+        ]
+      }
+    },
+    {
+      "id": "RN-020",
+      "nome": "Quais vales entram no desconto",
+      "categoria": "calculo",
+      "descricao": "Todos os vales do cooperado com status pending e granted_on ≤ último dia do período. Inclui pendentes de meses anteriores que ainda não foram descontados (ex.: cooperado faltou o mês inteiro).",
+      "formula": "deductions = Σ advances.amount where member_id and status = pending and granted_on <= last_day(period)",
+      "nota_pdf": "O pdf filtrava só o mês do lançamento; vale de julho não descontado em julho sumia.",
+      "status": "proposto",
+      "origem": {
+        "tipo": "complemento",
+        "ref": "pdf p.5 passo 7"
+      },
+      "refs": {
+        "entidades": [
+          "EN-vale"
+        ],
+        "regras": [
+          "RN-002",
+          "RN-008"
+        ]
+      }
+    },
+    {
+      "id": "RN-021",
+      "nome": "Vale só cancela enquanto pendente",
+      "categoria": "integridade",
+      "condicao": "status != pending",
+      "erro": "ERR-ADVANCE-001",
+      "status": "proposto",
+      "origem": {
+        "tipo": "complemento",
+        "ref": "-"
+      },
+      "refs": {
+        "entidades": [
+          "EN-vale"
+        ],
+        "api": [
+          "API-advances-cancel"
+        ],
+        "erros": [
+          "ERR-ADVANCE-001"
+        ]
+      },
+      "descricao": "Vale já descontado num fechamento não pode ser cancelado. Para desfazer, reabre-se o mês (RN-023)."
+    },
+    {
+      "id": "RN-022",
+      "nome": "Exclusão de lançamento é soft delete",
+      "categoria": "integridade",
+      "descricao": "Venda e despesa não somem do banco: recebem deleted_at. Só em mês aberto (RN-011). Ficam fora de listagens e cálculos.",
+      "status": "proposto",
+      "origem": {
+        "tipo": "complemento",
+        "ref": "pdf apagava do estado local (p.16)"
+      },
+      "refs": {
+        "entidades": [
+          "EN-venda",
+          "EN-despesa"
+        ],
+        "regras": [
+          "RN-011"
+        ],
+        "politicas": [
+          "PL-004"
+        ],
+        "api": [
+          "API-sales-delete",
+          "API-expenses-delete"
+        ]
+      }
+    },
+    {
+      "id": "RN-023",
+      "nome": "Reabertura de mês",
+      "categoria": "processo",
+      "descricao": "Só gestor, com motivo obrigatório. Efeitos na mesma transação: payout.status = reopened; vales deducted por este fechamento voltam a pending; vales carry_over gerados por ele são cancelled; lançamentos do mês voltam a ser permitidos. Fechar de novo cria um novo payout; o reaberto fica no histórico.",
+      "status": "proposto",
+      "origem": {
+        "tipo": "complemento",
+        "ref": "-"
+      },
+      "refs": {
+        "entidades": [
+          "EN-fechamento",
+          "EN-vale"
+        ],
+        "regras": [
+          "RN-011",
+          "RN-018"
+        ],
+        "politicas": [
+          "PL-002"
+        ],
+        "api": [
+          "API-payouts-reopen"
+        ],
+        "fluxos": [
+          "FL-001"
+        ]
+      }
+    },
+    {
+      "id": "RN-024",
+      "nome": "Retirada mínima (Lei 12.690)",
+      "categoria": "regulatorio",
+      "descricao": "Cooperativas de trabalho podem ter que garantir retirada não inferior ao piso da categoria ou salário mínimo proporcional. Se aplicável, o sistema deve alertar quando net < mínimo. Não bloqueia.",
+      "status": "pergunta-aberta",
+      "pergunta": "A cooperativa é regida pela Lei 12.690/12? Qual o piso? Confirmar com contador.",
+      "origem": {
+        "tipo": "complemento",
+        "ref": "Lei 12.690/12 art. 7"
+      },
+      "refs": {
+        "telas": [
+          "UI-fechamento"
+        ]
+      }
+    },
+    {
+      "id": "RN-025",
+      "nome": "Fechamento é snapshot",
+      "categoria": "integridade",
+      "descricao": "Depois de fechado, extrato e histórico lêem payouts e payout_items. Nunca recalculam a partir de presenças/vendas. Mudança de parâmetro depois não altera fechamentos passados.",
+      "status": "proposto",
+      "origem": {
+        "tipo": "complemento",
+        "ref": "pdf não persistia itens"
+      },
+      "refs": {
+        "entidades": [
+          "EN-fechamento",
+          "EN-fechamento-item"
+        ],
+        "api": [
+          "API-payouts-byId",
+          "API-payouts-memberStatement"
+        ]
+      }
+    },
+    {
+      "id": "RN-026",
+      "nome": "Parâmetros vigentes no mês",
+      "categoria": "calculo",
+      "descricao": "O fechamento usa a linha de payout_settings com maior effective_from ≤ period. Se não existir, usa os padrões legais (10%, 5%, 0, carry_over) e registra isso no settings_snapshot.",
+      "status": "proposto",
+      "origem": {
+        "tipo": "decisao",
+        "ref": "DEC-002"
+      },
+      "refs": {
+        "entidades": [
+          "EN-parametros-rateio",
+          "EN-fechamento"
+        ],
+        "regras": [
+          "RN-010"
+        ]
+      }
+    },
+    {
+      "id": "RN-027",
+      "nome": "Isolamento por cooperativa",
+      "categoria": "seguranca",
+      "descricao": "Toda leitura e escrita filtra por cooperative_id vindo da sessão. IDs de outra cooperativa retornam NOT_FOUND, nunca FORBIDDEN (não vazar existência).",
+      "status": "proposto",
+      "origem": {
+        "tipo": "repo",
+        "ref": "docs/trpc.md 'aplicar sempre o cooperativeId da sessão'"
+      },
+      "refs": {
+        "entidades": [
+          "EN-cooperativa"
+        ],
+        "politicas": [
+          "PL-007"
+        ],
+        "testes": [
+          "TS-017"
+        ],
+        "decisoes": [
+          "DEC-005"
+        ]
+      }
     }
   ]
 }

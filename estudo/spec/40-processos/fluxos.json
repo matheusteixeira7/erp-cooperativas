@@ -1,0 +1,462 @@
+{
+  "descricao": "Processos ponta a ponta e máquinas de estado. Passos referenciam procedures e regras.",
+  "fluxos": [
+    {
+      "id": "FL-001",
+      "nome": "Fechamento mensal do rateio",
+      "descricao": "O gestor confere o mês, simula, ajusta o que faltar, e fecha. Depois paga os cooperados via PIX fora do sistema e marca como pago.",
+      "ator": "gestor",
+      "status": "confirmado",
+      "origem": {
+        "tipo": "pdf",
+        "ref": "p.4-5, p.8-10"
+      },
+      "refs": {
+        "entidades": [
+          "EN-fechamento",
+          "EN-fechamento-item",
+          "EN-vale"
+        ],
+        "regras": [
+          "RN-001",
+          "RN-002",
+          "RN-003",
+          "RN-004",
+          "RN-006",
+          "RN-008",
+          "RN-010",
+          "RN-011",
+          "RN-012",
+          "RN-017",
+          "RN-018",
+          "RN-019",
+          "RN-023"
+        ],
+        "api": [
+          "API-payouts-simulate",
+          "API-payouts-close",
+          "API-payouts-reopen"
+        ],
+        "telas": [
+          "UI-fechamento",
+          "UI-historico-fechamentos"
+        ],
+        "testes": [
+          "TS-007",
+          "TS-012",
+          "TS-013"
+        ]
+      },
+      "maquina_de_estado": {
+        "estados": [
+          "open",
+          "closed",
+          "reopened"
+        ],
+        "inicial": "open",
+        "transicoes": [
+          {
+            "de": "open",
+            "para": "closed",
+            "evento": "payouts.close",
+            "guarda": "RN-004, RN-006, RN-018, RN-019 ok",
+            "efeitos": [
+              "grava payout + payout_items (RN-025)",
+              "vales → deducted (RN-008)",
+              "gera vales carry_over (RN-009)",
+              "audit close"
+            ]
+          },
+          {
+            "de": "closed",
+            "para": "reopened",
+            "evento": "payouts.reopen",
+            "guarda": "manager + motivo (PL-002)",
+            "efeitos": [
+              "vales deducted por este payout → pending",
+              "vales carry_over deste payout → cancelled",
+              "audit reopen"
+            ]
+          },
+          {
+            "de": "reopened",
+            "para": "closed",
+            "evento": "payouts.close",
+            "guarda": "idem open→closed",
+            "efeitos": [
+              "novo registro payout; o reaberto permanece no histórico"
+            ]
+          }
+        ],
+        "nota": "open é implícito (sem registro closed para o período)."
+      },
+      "passos": [
+        {
+          "n": 1,
+          "quem": "gestor",
+          "faz": "Abre a tela de fechamento e escolhe o período.",
+          "tela": "UI-fechamento"
+        },
+        {
+          "n": 2,
+          "quem": "sistema",
+          "faz": "Roda payouts.simulate. Mostra receita, despesas, fundos, sobra distribuível, diária, tabela por cooperado, resíduo de arredondamento.",
+          "api": "API-payouts-simulate"
+        },
+        {
+          "n": 3,
+          "quem": "gestor",
+          "faz": "Confere. Se faltou venda, despesa, presença ou vale, lança e volta ao passo 2.",
+          "telas": [
+            "UI-vendas",
+            "UI-financeiro",
+            "UI-chamada"
+          ]
+        },
+        {
+          "n": 4,
+          "quem": "gestor",
+          "faz": "Clica 'Fechar mês'. Confirma em diálogo que mostra período e total a distribuir.",
+          "tela": "UI-fechamento"
+        },
+        {
+          "n": 5,
+          "quem": "sistema",
+          "faz": "payouts.close em uma transação: recalcula (não confia na simulação exibida), grava snapshot, marca vales, gera carry_over, audita.",
+          "api": "API-payouts-close"
+        },
+        {
+          "n": 6,
+          "quem": "gestor",
+          "faz": "Exporta demonstrativo (PDF/CSV), faz os PIX, marca cada cooperado como pago.",
+          "api": "API-payouts-markPaid"
+        },
+        {
+          "n": 7,
+          "quem": "cooperado",
+          "faz": "Vê o próprio extrato no celular.",
+          "tela": "UI-extrato-cooperado",
+          "api": "API-payouts-memberStatement"
+        }
+      ]
+    },
+    {
+      "id": "FL-002",
+      "nome": "Chamada diária",
+      "descricao": "No começo do turno, o operador marca quem veio. Pode corrigir dias anteriores enquanto o mês estiver aberto.",
+      "ator": "operador",
+      "status": "confirmado",
+      "origem": {
+        "tipo": "pdf",
+        "ref": "p.6-7"
+      },
+      "refs": {
+        "entidades": [
+          "EN-presenca",
+          "EN-cooperado"
+        ],
+        "regras": [
+          "RN-011",
+          "RN-013",
+          "RN-014"
+        ],
+        "validacoes": [
+          "VL-006",
+          "VL-010"
+        ],
+        "api": [
+          "API-attendance-byDate",
+          "API-attendance-saveDaily",
+          "API-members-list"
+        ],
+        "telas": [
+          "UI-chamada"
+        ],
+        "testes": [
+          "TS-010"
+        ]
+      },
+      "passos": [
+        {
+          "n": 1,
+          "quem": "operador",
+          "faz": "Abre a chamada. Data padrão = hoje.",
+          "tela": "UI-chamada"
+        },
+        {
+          "n": 2,
+          "quem": "sistema",
+          "faz": "Lista cooperados ativos na data, com presença já registrada se houver.",
+          "api": "API-attendance-byDate"
+        },
+        {
+          "n": 3,
+          "quem": "operador",
+          "faz": "Toca em cada nome para alternar presente/ausente. 'Marcar todos' disponível."
+        },
+        {
+          "n": 4,
+          "quem": "operador",
+          "faz": "Confirma chamada."
+        },
+        {
+          "n": 5,
+          "quem": "sistema",
+          "faz": "Upsert em lote, atômico. Rejeita se o mês estiver fechado (ERR-PAYOUT-003).",
+          "api": "API-attendance-saveDaily"
+        }
+      ]
+    },
+    {
+      "id": "FL-003",
+      "nome": "Registro de venda",
+      "ator": "operador",
+      "descricao": "Caminhão do comprador é carregado; cada tipo de material é pesado e registrado com preço combinado.",
+      "status": "confirmado",
+      "origem": {
+        "tipo": "pdf",
+        "ref": "p.10-14"
+      },
+      "refs": {
+        "entidades": [
+          "EN-venda",
+          "EN-item-venda",
+          "EN-comprador",
+          "EN-tipo-material"
+        ],
+        "regras": [
+          "RN-011",
+          "RN-015",
+          "RN-016"
+        ],
+        "validacoes": [
+          "VL-002",
+          "VL-003",
+          "VL-006",
+          "VL-009"
+        ],
+        "api": [
+          "API-sales-create",
+          "API-buyers-list",
+          "API-materialTypes-list"
+        ],
+        "telas": [
+          "UI-vendas"
+        ],
+        "testes": [
+          "TS-011"
+        ]
+      },
+      "passos": [
+        {
+          "n": 1,
+          "quem": "operador",
+          "faz": "Escolhe comprador (ou cadastra novo inline) e data."
+        },
+        {
+          "n": 2,
+          "quem": "operador",
+          "faz": "Adiciona itens: material, peso, preço/kg. Vê subtotal e total ao vivo (cálculo local só para exibição)."
+        },
+        {
+          "n": 3,
+          "quem": "operador",
+          "faz": "Finaliza venda."
+        },
+        {
+          "n": 4,
+          "quem": "sistema",
+          "faz": "Recalcula totais, grava venda + itens em transação, audita.",
+          "api": "API-sales-create"
+        }
+      ]
+    },
+    {
+      "id": "FL-004",
+      "nome": "Lançamento de despesa",
+      "ator": "operador",
+      "descricao": "Conta do galpão paga ou a pagar entra como despesa da competência.",
+      "status": "confirmado",
+      "origem": {
+        "tipo": "pdf",
+        "ref": "p.15-16"
+      },
+      "refs": {
+        "entidades": [
+          "EN-despesa"
+        ],
+        "regras": [
+          "RN-011",
+          "RN-022"
+        ],
+        "validacoes": [
+          "VL-004",
+          "VL-006"
+        ],
+        "api": [
+          "API-expenses-create",
+          "API-expenses-list",
+          "API-expenses-delete"
+        ],
+        "telas": [
+          "UI-financeiro"
+        ]
+      },
+      "passos": [
+        {
+          "n": 1,
+          "quem": "operador",
+          "faz": "Descrição, categoria, valor, data. Lançar."
+        },
+        {
+          "n": 2,
+          "quem": "sistema",
+          "faz": "Valida, checa mês aberto, grava, audita."
+        },
+        {
+          "n": 3,
+          "quem": "gestor",
+          "faz": "Pode excluir (soft) enquanto o mês estiver aberto."
+        }
+      ]
+    },
+    {
+      "id": "FL-005",
+      "nome": "Ciclo do vale",
+      "ator": "operador / sistema",
+      "descricao": "Vale nasce pendente, é descontado no fechamento do mês da competência, ou cancelado antes.",
+      "status": "confirmado",
+      "origem": {
+        "tipo": "pdf",
+        "ref": "p.17-18"
+      },
+      "refs": {
+        "entidades": [
+          "EN-vale"
+        ],
+        "regras": [
+          "RN-008",
+          "RN-009",
+          "RN-020",
+          "RN-021",
+          "RN-023"
+        ],
+        "api": [
+          "API-advances-create",
+          "API-advances-cancel"
+        ],
+        "telas": [
+          "UI-financeiro"
+        ],
+        "testes": [
+          "TS-007",
+          "TS-014"
+        ]
+      },
+      "maquina_de_estado": {
+        "estados": [
+          "pending",
+          "deducted",
+          "cancelled"
+        ],
+        "inicial": "pending",
+        "transicoes": [
+          {
+            "de": "pending",
+            "para": "deducted",
+            "evento": "payouts.close",
+            "regra": "RN-008"
+          },
+          {
+            "de": "pending",
+            "para": "cancelled",
+            "evento": "advances.cancel",
+            "regra": "RN-021"
+          },
+          {
+            "de": "deducted",
+            "para": "pending",
+            "evento": "payouts.reopen",
+            "regra": "RN-023"
+          }
+        ]
+      }
+    },
+    {
+      "id": "FL-006",
+      "nome": "Cadastro e desligamento de cooperado",
+      "ator": "gestor",
+      "status": "proposto",
+      "origem": {
+        "tipo": "pdf",
+        "ref": "p.5 POST /api/cooperados; tela é complemento"
+      },
+      "refs": {
+        "entidades": [
+          "EN-cooperado",
+          "EN-usuario"
+        ],
+        "regras": [
+          "RN-007"
+        ],
+        "validacoes": [
+          "VL-001",
+          "VL-007",
+          "VL-008",
+          "VL-012"
+        ],
+        "politicas": [
+          "PL-003"
+        ],
+        "api": [
+          "API-members-create",
+          "API-members-update",
+          "API-members-deactivate"
+        ],
+        "telas": [
+          "UI-cooperados"
+        ]
+      },
+      "passos": [
+        {
+          "n": 1,
+          "quem": "gestor",
+          "faz": "Cadastra nome, CPF, PIX, telefone, admissão."
+        },
+        {
+          "n": 2,
+          "quem": "sistema",
+          "faz": "Valida CPF, checa duplicidade na cooperativa, grava."
+        },
+        {
+          "n": 3,
+          "quem": "gestor",
+          "faz": "Opcional: cria acesso (usuário perfil member) para o cooperado ver o extrato."
+        },
+        {
+          "n": 4,
+          "quem": "gestor",
+          "faz": "Desligamento: informa left_on. Cooperado sai da chamada a partir dessa data. Histórico preservado."
+        }
+      ],
+      "descricao": "Gestor cadastra o cooperado com CPF único, opcionalmente cria acesso, e no desligamento informa a data em vez de apagar."
+    },
+    {
+      "id": "FL-007",
+      "nome": "Pipeline operacional completo (visão fase 2)",
+      "descricao": "[Entrada/Balança] → [Triagem e Produção] → [Estoque e Venda] → [Financeiro e Rateio]. A v1 implementa só o último elo mais a venda. Os três primeiros são fase 2.",
+      "ator": "todos",
+      "status": "fase-2",
+      "origem": {
+        "tipo": "pdf",
+        "ref": "p.2 '4 Grandes Pilares'"
+      },
+      "refs": {
+        "fluxos": [
+          "FL-001",
+          "FL-003"
+        ]
+      }
+    }
+  ]
+}

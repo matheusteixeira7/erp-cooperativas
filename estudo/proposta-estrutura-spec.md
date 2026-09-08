@@ -58,7 +58,7 @@ Isso é o que eu complemento. Cada item vira um registro na spec marcado como `"
 Recomendo **JSON, em vários arquivos, com um índice na raiz**. Motivos:
 - Agentes lêem JSON nativamente e JSON Schema valida o arquivo (você pega erro antes de gastar token).
 - Vários arquivos = cada agente carrega só a parte dele no contexto.
-- Contratos de API em **OpenAPI** e tipos em **JSON Schema** porque são padrões que ferramentas já entendem (gerar cliente, validar request, mockar servidor).
+- Contratos de API descritos como **procedures tRPC** (a stack real do repo é Next.js + tRPC + Drizzle, não Express/REST como no PDF). Tipos primitivos viram zod schemas em `packages/domain`.
 
 XML não recomendo: mais verboso, ferramentas de IA lidam pior, e não há ganho aqui.
 
@@ -80,8 +80,8 @@ spec/
 ├── 40-processos/
 │   └── fluxos.json               # FL-xxx: passos, máquinas de estado, transações
 ├── 50-api/
-│   ├── openapi.json              # contratos REST (padrão OpenAPI 3.1)
-│   └── erros.json                # ERR-xxx: código, HTTP status, mensagem pt-BR, regra que dispara
+│   ├── trpc.json                 # API-xxx: procedures tRPC (router, input/output zod, perfis, erros)
+│   └── erros.json                # ERR-xxx: domain_code, TRPC code, HTTP, mensagem pt-BR, regra que dispara
 ├── 60-telas/
 │   └── telas.json                # UI-xxx: campos, ações → endpoint, estados (vazio/carregando/erro), requisitos de UX
 ├── 70-arquitetura/
@@ -90,9 +90,11 @@ spec/
 │   ├── infra.json                # Render, Vercel, variáveis de ambiente
 │   └── nao-funcionais.json       # NF-xxx: performance, offline, LGPD, backup, locale
 ├── 80-testes/
-│   └── aceitacao.json            # TS-xxx: dado/quando/então com fixtures e números esperados
-└── 90-entrega/
-    └── tarefas.json              # TK-xxx: backlog para agentes, dependências, definition of done
+│   ├── fixtures.json             # FX-xxx: cenários completos com números esperados (recalculados pelo validador)
+│   └── aceitacao.json            # TS-xxx: dado/quando/então apontando para fixtures
+├── 90-entrega/
+│   └── tarefas.json              # TK-xxx: backlog para agentes, dependências, definition of done
+└── validar.py                    # checa JSON, campos, IDs únicos, refs e recalcula as fixtures
 ```
 
 ## 4. Convenções que valem para todos os arquivos
@@ -122,7 +124,33 @@ Todo endpoint tem pelo menos 1 teste `TS-`. Toda tela aponta para os endpoints q
 3. `90-entrega/tarefas.json` vira a fila. Cada agente recebe 1 tarefa + só os arquivos que ela referencia.
 4. O agente termina quando os testes `TS-` da tarefa passam.
 
-## 6. Decisões que preciso de você
+## 6. Decisões tomadas (2026-09-08)
 
-1. **Formato**: JSON multi-arquivo (recomendo) ou JSON único gigante?
-2. **Fundos legais** (Reserva Legal 10% + FATES 5%): entram na fórmula do rateio ou a cooperativa trata fora do sistema?
+| ID | Decisão | Quem |
+|----|---------|------|
+| DEC-001 | JSON em vários arquivos, índice em `spec.json`. | Matheus |
+| DEC-002 | Fundos legais (Reserva Legal ≥ 10%, FATES ≥ 5%) calculados dentro do sistema, percentuais por cooperativa em `payout_settings`. | Matheus |
+| DEC-003 | API como tRPC (stack real), não REST. Rotas do PDF ficam como `pdf_rota` histórico. | Matheus |
+| DEC-004 | Código 100% em inglês (tabelas, routers, tipos, arquivos, comentários, commits). Interface 100% em português (telas, erros, exportações). Mapa em `00-contexto/glossario.json`. | Matheus |
+| DEC-005 | Multi-cooperativa desde o início: `cooperative_id` em toda tabela, vindo da sessão. | Matheus |
+
+## 7. O que ainda está aberto
+
+- **RN-024** Lei 12.690/12 (retirada mínima): confirmar com o contador se a cooperativa se enquadra.
+- **Auth**: Auth.js ou implementação própria (`70-arquitetura/stack.json`). Recomendo Auth.js com credenciais.
+
+## 8. Erros do PDF que a spec corrige
+
+- Arredondava a diária para cima: 220 × 164,55 = R$ 36.201 distribuídos de uma sobra de R$ 36.200. Agora é `floor` e o resíduo fica registrado (RN-012).
+- Os 7 cooperados do exemplo somavam 144 dias, mas o texto dizia 220. As fixtures fecham (`80-testes/fixtures.json`).
+- Cooperado desligado perdia os dias trabalhados no mês (RN-007).
+- Vale de mês anterior não descontado sumia (RN-020).
+- Vale maior que o bruto era perdoado em silêncio (RN-009).
+- Total da venda vinha do front (RN-015). Erro do banco vazava para o cliente (ERR-SYS-001).
+- Demonstrativo por cooperado não era gravado, então não existia extrato depois (EN-fechamento-item).
+
+## 9. Como validar
+
+```bash
+cd estudo/spec && python3 validar.py
+```
