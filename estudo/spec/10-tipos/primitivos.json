@@ -1,0 +1,113 @@
+{
+  "tipos": [
+    {
+      "id": "TP-CPF",
+      "nome": "CPF",
+      "descricao": "Cadastro de pessoa fisica. Guardar so digitos.",
+      "base": "string",
+      "regex": "^[0-9]{11}$",
+      "validacao_extra": "digitos verificadores validos",
+      "sql": "CHAR(11)",
+      "typescript": "type CPF = string & { __brand: 'CPF' }",
+      "pii": true,
+      "status": "proposto",
+      "origem": { "tipo": "complemento", "ref": "pdf usa VARCHAR(14) sem validar" },
+      "refs": { "entidades": ["EN-cooperado"], "regras": ["VL-001"] }
+    },
+    {
+      "id": "TP-DinheiroBRL",
+      "nome": "DinheiroBRL",
+      "descricao": "Valor em reais. Nunca usar float. Guardar em centavos inteiros OU numeric(12,2).",
+      "base": "decimal",
+      "escala": 2,
+      "minimo": 0,
+      "sql": "NUMERIC(12,2)",
+      "typescript": "type DinheiroBRL = number /* centavos inteiros */",
+      "arredondamento": "half-even, 2 casas",
+      "status": "proposto",
+      "origem": { "tipo": "complemento", "ref": "pdf usa NUMERIC(10,2) e parseFloat" },
+      "refs": { "entidades": ["EN-venda", "EN-item-venda", "EN-despesa", "EN-vale", "EN-fechamento"], "regras": ["RN-001", "RN-002"] }
+    },
+    {
+      "id": "TP-PesoKg",
+      "nome": "PesoKg",
+      "descricao": "Peso em quilogramas, positivo.",
+      "base": "decimal",
+      "escala": 2,
+      "minimo_exclusivo": 0,
+      "sql": "NUMERIC(10,2) CHECK (valor > 0)",
+      "status": "proposto",
+      "origem": { "tipo": "complemento", "ref": "pdf p.3 itens_venda.peso_kg" },
+      "refs": { "entidades": ["EN-item-venda"], "regras": ["VL-002"] }
+    },
+    {
+      "id": "TP-PrecoPorKg",
+      "nome": "PrecoPorKg",
+      "descricao": "Preco unitario em reais por kg.",
+      "base": "decimal",
+      "escala": 4,
+      "minimo_exclusivo": 0,
+      "sql": "NUMERIC(10,4)",
+      "status": "proposto",
+      "origem": { "tipo": "complemento", "ref": "pdf p.3 usa NUMERIC(10,2); 4 casas evita perda em R$ 0,65/kg x toneladas" },
+      "refs": { "entidades": ["EN-item-venda"] }
+    },
+    {
+      "id": "TP-Percentual",
+      "nome": "Percentual",
+      "descricao": "Fracao entre 0 e 1 (0.10 = 10%).",
+      "base": "decimal",
+      "escala": 4,
+      "minimo": 0,
+      "maximo": 1,
+      "status": "proposto",
+      "origem": { "tipo": "complemento", "ref": "necessario para fundos legais RN-010" },
+      "refs": { "regras": ["RN-010"] }
+    },
+    {
+      "id": "TP-MesAno",
+      "nome": "MesAno",
+      "descricao": "Periodo de competencia mensal.",
+      "base": "string",
+      "regex": "^[0-9]{4}-(0[1-9]|1[0-2])$",
+      "exemplo": "2026-08",
+      "sql": "DATE (sempre dia 01) ou (ano INT, mes INT)",
+      "status": "proposto",
+      "origem": { "tipo": "complemento", "ref": "pdf usa mes INT + ano INT separados" },
+      "refs": { "entidades": ["EN-fechamento"], "api": ["API-rateio-simulacao", "API-rateio-fechar"] }
+    },
+    {
+      "id": "TP-DataLocal",
+      "nome": "DataLocal",
+      "descricao": "Data sem hora, fuso America/Sao_Paulo.",
+      "base": "string",
+      "formato": "YYYY-MM-DD",
+      "sql": "DATE",
+      "status": "confirmado",
+      "origem": { "tipo": "pdf", "ref": "p.3 presencas.data, vendas.data_venda" },
+      "refs": { "entidades": ["EN-presenca", "EN-venda", "EN-despesa", "EN-vale"] }
+    },
+    {
+      "id": "TP-ChavePix",
+      "nome": "ChavePix",
+      "descricao": "CPF, e-mail, telefone (+55...) ou chave aleatoria (UUID).",
+      "base": "string",
+      "max": 77,
+      "pii": true,
+      "status": "proposto",
+      "origem": { "tipo": "pdf", "ref": "p.3 cooperados.chave_pix VARCHAR(100)" },
+      "refs": { "entidades": ["EN-cooperado"] }
+    },
+    {
+      "id": "TP-Id",
+      "nome": "Id",
+      "descricao": "Identificador de registro.",
+      "base": "integer",
+      "sql": "BIGSERIAL / IDENTITY",
+      "status": "pergunta-aberta",
+      "pergunta": "SERIAL (como no pdf) ou UUID? UUID facilita uso offline no galpao.",
+      "origem": { "tipo": "pdf", "ref": "p.3 SERIAL PRIMARY KEY" },
+      "refs": {}
+    }
+  ]
+}

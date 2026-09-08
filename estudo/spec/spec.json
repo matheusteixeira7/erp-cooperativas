@@ -1,0 +1,43 @@
+{
+  "$schema": "./schemas/spec.schema.json",
+  "nome": "Recicla ERP",
+  "versao": "0.1.0",
+  "descricao": "ERP para cooperativa de trabalho de materiais reciclaveis. Rateio de sobras por dias trabalhados.",
+  "fonte_primaria": {
+    "tipo": "pdf",
+    "arquivo": "Desenvolvimento de ERP para Cooperativas.pdf",
+    "paginas": 24,
+    "data": "2026-08-23"
+  },
+  "convencoes": {
+    "idioma": "pt-BR",
+    "prefixos_id": {
+      "TP": "tipo primitivo", "EN": "entidade", "RN": "regra de negocio", "VL": "validacao",
+      "PL": "politica de acesso", "FL": "fluxo/processo", "API": "endpoint", "ERR": "erro",
+      "UI": "tela", "NF": "requisito nao funcional", "TS": "teste de aceitacao", "TK": "tarefa"
+    },
+    "status": ["confirmado", "proposto", "pergunta-aberta"],
+    "origem_tipo": ["pdf", "complemento", "decisao"],
+    "campos_obrigatorios": ["id", "nome", "descricao", "status", "origem", "refs"]
+  },
+  "arquivos": [
+    "00-contexto/dominio.json",
+    "00-contexto/glossario.json",
+    "10-tipos/primitivos.json",
+    "10-tipos/enums.json",
+    "20-entidades/*.json",
+    "30-regras/regras-negocio.json",
+    "30-regras/validacoes.json",
+    "30-regras/politicas.json",
+    "40-processos/fluxos.json",
+    "50-api/openapi.json",
+    "50-api/erros.json",
+    "60-telas/telas.json",
+    "70-arquitetura/stack.json",
+    "70-arquitetura/estrutura-pastas.json",
+    "70-arquitetura/infra.json",
+    "70-arquitetura/nao-funcionais.json",
+    "80-testes/aceitacao.json",
+    "90-entrega/tarefas.json"
+  ]
+}

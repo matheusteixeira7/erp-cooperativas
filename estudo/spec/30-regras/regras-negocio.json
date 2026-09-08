@@ -1,0 +1,155 @@
+{
+  "regras": [
+    {
+      "id": "RN-001",
+      "nome": "Valor da diaria",
+      "categoria": "calculo",
+      "descricao": "O valor de 1 dia trabalhado e a sobra liquida do mes dividida pelo total de dias trabalhados por todos os cooperados.",
+      "formula": "valor_por_dia = sobra_liquida / total_dias_trabalhados_geral",
+      "entradas": [
+        { "nome": "sobra_liquida", "tipo": "TP-DinheiroBRL", "vem_de": "RN-003" },
+        { "nome": "total_dias_trabalhados_geral", "tipo": "integer", "vem_de": "RN-005" }
+      ],
+      "saida": { "nome": "valor_por_dia", "tipo": "TP-DinheiroBRL" },
+      "precondicoes": ["RN-004", "RN-006"],
+      "exemplos": [
+        { "dado": { "sobra_liquida": 36200.00, "total_dias_trabalhados_geral": 220 }, "espera": { "valor_por_dia": 164.55 }, "fonte": "pdf p.8" }
+      ],
+      "status": "confirmado",
+      "origem": { "tipo": "pdf", "ref": "p.3 formula; p.4 codigo passo 5" },
+      "refs": { "entidades": ["EN-fechamento"], "api": ["API-rateio-simulacao", "API-rateio-fechar"], "telas": ["UI-fechamento"], "testes": ["TS-001"] }
+    },
+    {
+      "id": "RN-002",
+      "nome": "Rateio individual do cooperado",
+      "categoria": "calculo",
+      "descricao": "Cada cooperado recebe seus dias trabalhados vezes o valor da diaria, menos vales e adiantamentos pendentes do mes.",
+      "formula": "bruto = dias_cooperado * valor_por_dia; liquido = max(0, bruto - descontos_pendentes)",
+      "entradas": [
+        { "nome": "dias_cooperado", "tipo": "integer" },
+        { "nome": "valor_por_dia", "tipo": "TP-DinheiroBRL", "vem_de": "RN-001" },
+        { "nome": "descontos_pendentes", "tipo": "TP-DinheiroBRL", "vem_de": "RN-008" }
+      ],
+      "saida": { "bruto": "TP-DinheiroBRL", "liquido": "TP-DinheiroBRL" },
+      "exemplos": [
+        { "dado": { "dias_cooperado": 22, "valor_por_dia": 164.55, "descontos_pendentes": 200.00 }, "espera": { "bruto": 3620.10, "liquido": 3420.10 }, "fonte": "pdf p.8 Ana Maria Silva" },
+        { "dado": { "dias_cooperado": 1, "valor_por_dia": 100.00, "descontos_pendentes": 250.00 }, "espera": { "bruto": 100.00, "liquido": 0.00 }, "nota": "ver RN-009 sobre o que acontece com os R$ 150 restantes" }
+      ],
+      "status": "confirmado",
+      "origem": { "tipo": "pdf", "ref": "p.3 formula; p.5 codigo passo 7" },
+      "refs": { "entidades": ["EN-fechamento", "EN-vale"], "api": ["API-rateio-simulacao"], "telas": ["UI-fechamento"], "testes": ["TS-002"] }
+    },
+    {
+      "id": "RN-003",
+      "nome": "Sobra liquida do mes",
+      "categoria": "calculo",
+      "descricao": "Receita bruta de vendas do mes menos despesas operacionais do mes.",
+      "formula": "sobra_liquida = receita_bruta - despesas_totais",
+      "criterio_periodo": "vendas por data_venda; despesas por data_despesa (competencia, nao caixa)",
+      "exemplos": [
+        { "dado": { "receita_bruta": 48500.00, "despesas_totais": 12300.00 }, "espera": { "sobra_liquida": 36200.00 }, "fonte": "pdf p.8" }
+      ],
+      "status": "confirmado",
+      "origem": { "tipo": "pdf", "ref": "p.4 codigo passos 1-3" },
+      "refs": { "entidades": ["EN-venda", "EN-despesa", "EN-fechamento"], "regras": ["RN-011"], "testes": ["TS-003"] }
+    },
+    {
+      "id": "RN-004",
+      "nome": "Sem sobra, sem rateio",
+      "categoria": "bloqueio",
+      "descricao": "Se a sobra liquida for zero ou negativa, o fechamento e bloqueado.",
+      "condicao": "sobra_liquida <= 0",
+      "erro": "ERR-RATEIO-001",
+      "status": "confirmado",
+      "origem": { "tipo": "pdf", "ref": "p.5 throw 'A sobra liquida e menor ou igual a zero'" },
+      "refs": { "api": ["API-rateio-simulacao", "API-rateio-fechar"], "testes": ["TS-004"] }
+    },
+    {
+      "id": "RN-005",
+      "nome": "Total de dias trabalhados",
+      "categoria": "calculo",
+      "descricao": "Soma de todas as presencas com presente = true no mes. Cada cooperado conta no maximo 1 por dia.",
+      "formula": "total = count(presencas where presente and mes(data) = mes)",
+      "status": "confirmado",
+      "origem": { "tipo": "pdf", "ref": "p.5 passo 4; p.3 UNIQUE(cooperado_id, data)" },
+      "refs": { "entidades": ["EN-presenca"], "regras": ["RN-007"] }
+    },
+    {
+      "id": "RN-006",
+      "nome": "Sem presenca, sem rateio",
+      "categoria": "bloqueio",
+      "descricao": "Se nao houver nenhuma presenca no mes, o fechamento e bloqueado.",
+      "condicao": "total_dias_trabalhados_geral == 0",
+      "erro": "ERR-RATEIO-002",
+      "status": "confirmado",
+      "origem": { "tipo": "pdf", "ref": "p.5 throw 'Nenhuma presenca registrada'" },
+      "refs": { "api": ["API-rateio-simulacao"], "testes": ["TS-005"] }
+    },
+    {
+      "id": "RN-007",
+      "nome": "So cooperado ativo entra no rateio",
+      "categoria": "elegibilidade",
+      "descricao": "Cooperados com ativo = false nao aparecem no demonstrativo.",
+      "status": "pergunta-aberta",
+      "pergunta": "Cooperado desligado no dia 20 trabalhou 15 dias. Recebe pelos 15 dias ou perde? O codigo do pdf faz ele perder.",
+      "origem": { "tipo": "pdf", "ref": "p.5 WHERE c.ativo = TRUE" },
+      "refs": { "entidades": ["EN-cooperado"], "testes": ["TS-006"] }
+    },
+    {
+      "id": "RN-008",
+      "nome": "Vales descontados no fechamento",
+      "categoria": "efeito",
+      "descricao": "Ao fechar o mes, todos os vales pendentes do mes viram descontados (pago_ou_descontado = true). A simulacao nao altera nada.",
+      "status": "confirmado",
+      "origem": { "tipo": "pdf", "ref": "p.5 tabela de rotas: 'marca vales como quitados'" },
+      "refs": { "entidades": ["EN-vale", "EN-fechamento"], "api": ["API-rateio-fechar"], "fluxos": ["FL-001"], "testes": ["TS-007"] }
+    },
+    {
+      "id": "RN-009",
+      "nome": "Vale maior que o bruto",
+      "categoria": "decisao",
+      "descricao": "Quando descontos > bruto, o liquido e zero. O que acontece com a diferenca?",
+      "opcoes": [
+        { "id": "A", "nome": "perdoa", "descricao": "diferenca e absorvida pela cooperativa (comportamento atual do pdf)" },
+        { "id": "B", "nome": "saldo devedor", "descricao": "diferenca vira vale pendente no mes seguinte (recomendado)" }
+      ],
+      "status": "pergunta-aberta",
+      "origem": { "tipo": "complemento", "ref": "pdf p.5 valorLiquido < 0 ? 0 : valorLiquido" },
+      "refs": { "regras": ["RN-002"], "entidades": ["EN-vale"] }
+    },
+    {
+      "id": "RN-010",
+      "nome": "Fundos legais antes do rateio",
+      "categoria": "regulatorio",
+      "descricao": "Lei 5.764/71 art. 28: Reserva Legal (minimo 10% das sobras) e FATES (minimo 5%) sao retidos antes de distribuir. A formula do pdf distribui 100%.",
+      "formula_proposta": "sobra_distribuivel = sobra_liquida * (1 - reserva_legal - fates)",
+      "parametros": [
+        { "nome": "reserva_legal", "tipo": "TP-Percentual", "padrao": 0.10 },
+        { "nome": "fates", "tipo": "TP-Percentual", "padrao": 0.05 }
+      ],
+      "status": "pergunta-aberta",
+      "pergunta": "Confirmar com o contador da cooperativa. Percentuais podem ser maiores por estatuto.",
+      "origem": { "tipo": "complemento", "ref": "Lei 5.764/71 art. 28" },
+      "refs": { "regras": ["RN-001"], "entidades": ["EN-fechamento"] }
+    },
+    {
+      "id": "RN-011",
+      "nome": "Mes fechado e imutavel",
+      "categoria": "integridade",
+      "descricao": "Depois de fechado, nao se pode inserir/alterar presenca, venda, despesa ou vale com data dentro do mes. Reabertura so por gestor, com motivo, gerando log.",
+      "erro": "ERR-RATEIO-003",
+      "status": "proposto",
+      "origem": { "tipo": "complemento", "ref": "pdf nao trata; tela permite data retroativa (p.7)" },
+      "refs": { "entidades": ["EN-fechamento", "EN-presenca", "EN-venda", "EN-despesa", "EN-vale"], "fluxos": ["FL-001"], "politicas": ["PL-002"] }
+    },
+    {
+      "id": "RN-012",
+      "nome": "Arredondamento do rateio",
+      "categoria": "calculo",
+      "descricao": "valor_por_dia arredondado a 2 casas gera diferenca entre soma dos brutos e sobra distribuivel. A diferenca (centavos) fica para a cooperativa.",
+      "status": "proposto",
+      "origem": { "tipo": "complemento", "ref": "pdf p.8: 220 x 164.55 = 36201.00, nao 36200.00" },
+      "refs": { "regras": ["RN-001", "RN-002"], "testes": ["TS-008"] }
+    }
+  ]
+}
