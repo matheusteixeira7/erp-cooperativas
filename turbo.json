@@ -17,6 +17,15 @@
     "typecheck": {
       "dependsOn": ["^typecheck"]
     },
+    "test": {
+      "cache": false,
+      "dependsOn": ["^test"],
+      "persistent": true
+    },
+    "test:run": {
+      "cache": false,
+      "dependsOn": ["^test:run"]
+    },
     "dev": {
       "cache": false,
       "persistent": true
