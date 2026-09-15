@@ -45,16 +45,22 @@ export type Buyer = {
 
 export type MaterialCategory = "plastic" | "paper" | "metal" | "glass" | "waste" | "other"
 
+/** Estado do material na pesagem (TP-EstadoMaterial, RN-030). */
+export type MaterialCondition = "loose" | "baled"
+
 export type MaterialType = {
   id: string
   name: string
   category: MaterialCategory
+  /** Pré-seleção do estado na UI. Mudar aqui não altera itens antigos (RN-030). */
+  defaultCondition: MaterialCondition
   active: boolean
 }
 
 export type SaleItem = {
   id: string
   materialTypeId: string
+  condition: MaterialCondition
   weightKg: number
   pricePerKg: number
   subtotal: number
@@ -192,6 +198,11 @@ export const ROLE_LABEL: Record<Role, string> = {
   manager: "Gestor",
   operator: "Operador",
   member: "Cooperado",
+}
+
+export const MATERIAL_CONDITION_LABEL: Record<MaterialCondition, string> = {
+  loose: "Solto",
+  baled: "Prensado",
 }
 
 export const MATERIAL_CATEGORY_LABEL: Record<MaterialCategory, string> = {

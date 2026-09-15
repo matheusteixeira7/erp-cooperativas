@@ -10,6 +10,7 @@ import type {
   DemoData,
   DemoUser,
   Expense,
+  MaterialCondition,
   MaterialType,
   Member,
   Payout,
@@ -65,32 +66,40 @@ const buyers: Buyer[] = [
 ]
 
 const materialTypes: MaterialType[] = [
-  { id: "mt-pet-cristal", name: "PET Cristal", category: "plastic", active: true },
-  { id: "mt-pet-colorido", name: "PET Colorido", category: "plastic", active: true },
-  { id: "mt-pead", name: "PEAD (plástico duro)", category: "plastic", active: true },
-  { id: "mt-pp", name: "PP", category: "plastic", active: true },
-  { id: "mt-papelao", name: "Papelão Ondulado", category: "paper", active: true },
-  { id: "mt-papel-branco", name: "Papel Branco", category: "paper", active: true },
-  { id: "mt-papel-misto", name: "Papel Misto", category: "paper", active: true },
-  { id: "mt-aluminio", name: "Alumínio (lata)", category: "metal", active: true },
-  { id: "mt-ferro", name: "Ferro / Sucata", category: "metal", active: true },
-  { id: "mt-cobre", name: "Cobre", category: "metal", active: true },
-  { id: "mt-vidro", name: "Vidro", category: "glass", active: true },
-  { id: "mt-rejeito", name: "Rejeito", category: "waste", active: false },
+  { id: "mt-pet-cristal", name: "PET Cristal", category: "plastic", defaultCondition: "baled", active: true },
+  { id: "mt-pet-colorido", name: "PET Colorido", category: "plastic", defaultCondition: "baled", active: true },
+  { id: "mt-pead", name: "PEAD (plástico duro)", category: "plastic", defaultCondition: "baled", active: true },
+  { id: "mt-pp", name: "PP", category: "plastic", defaultCondition: "baled", active: true },
+  { id: "mt-papelao", name: "Papelão Ondulado", category: "paper", defaultCondition: "baled", active: true },
+  { id: "mt-papel-branco", name: "Papel Branco", category: "paper", defaultCondition: "baled", active: true },
+  { id: "mt-papel-misto", name: "Papel Misto", category: "paper", defaultCondition: "baled", active: true },
+  { id: "mt-aluminio", name: "Alumínio (lata)", category: "metal", defaultCondition: "baled", active: true },
+  { id: "mt-ferro", name: "Ferro / Sucata", category: "metal", defaultCondition: "loose", active: true },
+  { id: "mt-cobre", name: "Cobre", category: "metal", defaultCondition: "loose", active: true },
+  { id: "mt-vidro", name: "Vidro", category: "glass", defaultCondition: "loose", active: true },
+  { id: "mt-rejeito", name: "Rejeito", category: "waste", defaultCondition: "loose", active: false },
 ]
+
+const materialById = new Map(materialTypes.map((m) => [m.id, m]))
+
+/** Condition of a seeded item: explicit value, else the material's default. */
+function conditionFor(materialTypeId: string, condition?: MaterialCondition): MaterialCondition {
+  return condition ?? materialById.get(materialTypeId)?.defaultCondition ?? "baled"
+}
 
 type SeedSale = {
   id: string
   buyerId: string
   soldOn: string
   invoiceNumber?: string
-  items: { materialTypeId: string; weightKg: number; pricePerKg: number }[]
+  items: { materialTypeId: string; condition?: MaterialCondition; weightKg: number; pricePerKg: number }[]
 }
 
 function buildSale(seed: SeedSale): Sale {
   const items = seed.items.map((item, index) => ({
     id: `${seed.id}-i${index + 1}`,
     materialTypeId: item.materialTypeId,
+    condition: conditionFor(item.materialTypeId, item.condition),
     weightKg: item.weightKg,
     pricePerKg: item.pricePerKg,
     subtotal: itemSubtotal(item.weightKg, item.pricePerKg),

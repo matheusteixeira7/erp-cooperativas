@@ -22,6 +22,7 @@ import type {
   DemoData,
   Expense,
   ExpenseCategory,
+  MaterialCondition,
   Member,
   Payout,
   PayoutSettingsVersion,
@@ -85,6 +86,35 @@ export function activeMembersOn(members: Member[], date: string) {
   return members.filter((m) => m.admittedOn <= date && (!m.leftOn || m.leftOn >= date))
 }
 
+export type LastPriceQuery = {
+  materialTypeId: string
+  condition: MaterialCondition
+  buyerId?: string
+  supplierId?: string
+}
+
+/**
+ * RN-030 / API-materialTypes-lastPrice: last price practiced with the same buyer (sales)
+ * or supplier (purchases) for material + condition. Soft-deleted documents are ignored.
+ * Suggestion only; the operator confirms.
+ */
+export function lastPricePerKg(data: DemoData, query: LastPriceQuery): { pricePerKg: number; on: string } | null {
+  const candidates: { on: string; createdAt: string; pricePerKg: number }[] = []
+  if (query.buyerId) {
+    for (const sale of data.sales) {
+      if (sale.deletedAt || sale.buyerId !== query.buyerId) continue
+      for (const item of sale.items) {
+        if (item.materialTypeId === query.materialTypeId && item.condition === query.condition) {
+          candidates.push({ on: sale.soldOn, createdAt: sale.createdAt, pricePerKg: item.pricePerKg })
+        }
+      }
+    }
+  }
+  candidates.sort((a, b) => b.on.localeCompare(a.on) || b.createdAt.localeCompare(a.createdAt))
+  const latest = candidates[0]
+  return latest ? { pricePerKg: latest.pricePerKg, on: latest.on } : null
+}
+
 export function runSimulation(data: DemoData, period: string): SimulationOutcome {
   return simulatePayout({
     period,
@@ -99,7 +129,7 @@ export function runSimulation(data: DemoData, period: string): SimulationOutcome
 
 // ---------- Store ----------
 
-export type SaleDraftItem = { materialTypeId: string; weightKg: number; pricePerKg: number }
+export type SaleDraftItem = { materialTypeId: string; condition: MaterialCondition; weightKg: number; pricePerKg: number }
 
 type Actor = { userId: string; name: string }
 
@@ -207,10 +237,12 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
           assertOpen(current, input.soldOn)
           if (input.items.length === 0) throw new DemoError("ERR-SALE-001")
           if (!current.buyers.some((b) => b.id === input.buyerId)) throw new DemoError("ERR-SALE-002")
+          if (input.items.some((item) => !current.materialTypes.some((m) => m.id === item.materialTypeId))) throw new DemoError("ERR-SALE-002")
           const id = newId("s")
           const items = input.items.map((item, index) => ({
             id: `${id}-i${index + 1}`,
             materialTypeId: item.materialTypeId,
+            condition: item.condition,
             weightKg: item.weightKg,
             pricePerKg: item.pricePerKg,
             subtotal: itemSubtotal(item.weightKg, item.pricePerKg),
