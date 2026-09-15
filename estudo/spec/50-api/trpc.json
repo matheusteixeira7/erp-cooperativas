@@ -9,17 +9,20 @@
     "idiomas": "Identificadores em inglês (DEC-004). O campo mensagem_pt em erros.json é o único texto que chega ao usuário e é sempre pt-BR."
   },
   "schemas_compartilhados": {
-    "Member": "{ id, name, cpfMasked, pixKey?(manager), phone?, admittedOn, leftOn?, active }",
+    "Member": "{ id, name, cpfMasked, pixKey?(manager), phone?, admittedOn, leftOn?, active, inssWithheld }",
     "Attendance": "{ memberId, memberName, present, note? }",
-    "SaleItemInput": "{ materialTypeId, weightKg, pricePerKg, baleCount? }",
-    "Sale": "{ id, buyer:{id,name}, soldOn, totalAmount, totalWeightKg, items:[{ materialType:{id,name}, weightKg, pricePerKg, subtotal }], invoiceNumber?, createdAt }",
+    "SaleItemInput": "{ materialTypeId, condition: MaterialCondition, weightKg, pricePerKg, baleCount? }",
+    "Sale": "{ id, buyer:{id,name}, soldOn, totalAmount, totalWeightKg, items:[{ materialType:{id,name}, condition, weightKg, pricePerKg, subtotal }], invoiceNumber?, createdAt }",
     "Expense": "{ id, description, category?, amount, incurredOn, createdAt }",
     "Advance": "{ id, member:{id,name}, kind, description, amount, grantedOn, status, deductedInPayoutId? }",
-    "PayoutSettings": "{ effectiveFrom, legalReserveRate, fatesRate, otherFundsRate, negativeBalancePolicy, includeMembersLeftInPeriod }",
-    "PayoutSummary": "{ period, grossRevenue, totalExpenses, surplus, legalReserveAmount, fatesAmount, otherFundsAmount, distributableSurplus, totalWorkedDays, dayValue, distributedTotal, roundingResidual, settings: PayoutSettings }",
-    "PayoutItem": "{ memberId, memberName, workedDays, grossAmount, deductionsAmount, netAmount, carryOverDebt, paidAt? }",
+    "PayoutSettings": "{ effectiveFrom, legalReserveRate, fatesRate, otherFundsRate, inssRate, negativeBalancePolicy, includeMembersLeftInPeriod }",
+    "PayoutSummary": "{ period, grossRevenue, totalPurchases, totalExpenses, surplus, legalReserveAmount, fatesAmount, otherFundsAmount, distributableSurplus, totalWorkedDays, dayValue, distributedTotal, roundingResidual, inssTotal, settings: PayoutSettings }",
+    "PayoutItem": "{ memberId, memberName, workedDays, grossAmount, inssBase, inssRate, inssAmount, deductionsAmount, netAmount, carryOverDebt, paidAt? }",
     "PayoutResult": "{ summary: PayoutSummary, items: PayoutItem[] }",
-    "Payout": "PayoutResult & { id, status, closedAt, closedBy:{id,name}, reopenedAt?, reopenReason? }"
+    "Payout": "PayoutResult & { id, status, closedAt, closedBy:{id,name}, reopenedAt?, reopenReason? }",
+    "Supplier": "{ id, kind: SupplierKind, name, cpfMasked?, cnpj?, pixKey?(manager), phone?, active }",
+    "PurchaseItemInput": "{ materialTypeId, condition: MaterialCondition, weightKg, pricePerKg }",
+    "Purchase": "{ id, supplier:{id,name,kind}, purchasedOn, totalAmount, totalWeightKg, paymentMethod, paidOn?, items:[{ materialType:{id,name}, condition, weightKg, pricePerKg, subtotal }], note?, createdAt }"
   },
   "routers": [
     {
@@ -205,7 +208,7 @@
           "roles": [
             "manager"
           ],
-          "input": "{ name: Text, cpf: Cpf, pixKey?: PixKey, phone?: string, admittedOn?: LocalDate=today, notes?: string }",
+          "input": "{ name: Text, cpf: Cpf, pixKey?: PixKey, phone?: string, admittedOn?: LocalDate=today, inssWithheld?: boolean=true, notes?: string }",
           "output": "Member",
           "erros": [
             "ERR-MEMBER-001",
@@ -251,7 +254,7 @@
           "roles": [
             "manager"
           ],
-          "input": "{ id: Id, name?, pixKey?, phone?, notes? }",
+          "input": "{ id: Id, name?, pixKey?, phone?, inssWithheld?, notes? }",
           "output": "Member",
           "erros": [
             "ERR-MEMBER-002"
@@ -273,7 +276,7 @@
               "UI-cooperados"
             ]
           },
-          "descricao": "CPF não se edita depois de criado (exclui e recria se errou antes de ter lançamentos)."
+          "descricao": "CPF não se edita depois de criado (members.delete e recria se errou antes de ter lançamentos). Mudar inssWithheld vale a partir do próximo fechamento; fechamentos passados não mudam (RN-025)."
         },
         {
           "id": "API-members-deactivate",
@@ -312,6 +315,95 @@
             ]
           },
           "descricao": "Desligamento. leftOn ≥ admittedOn."
+        },
+        {
+          "id": "API-members-reactivate",
+          "nome": "members.reactivate",
+          "tipo": "mutation",
+          "acesso": "protected",
+          "roles": [
+            "manager"
+          ],
+          "input": "{ id: Id }",
+          "output": "Member",
+          "erros": [
+            "ERR-MEMBER-002",
+            "ERR-MEMBER-005"
+          ],
+          "status": "proposto",
+          "origem": {
+            "tipo": "decisao",
+            "ref": "DEC-007"
+          },
+          "refs": {
+            "entidades": [
+              "EN-cooperado"
+            ],
+            "regras": [
+              "RN-029"
+            ],
+            "politicas": [
+              "PL-003",
+              "PL-006"
+            ],
+            "erros": [
+              "ERR-MEMBER-002",
+              "ERR-MEMBER-005"
+            ],
+            "telas": [
+              "UI-cooperados"
+            ],
+            "fluxos": [
+              "FL-006"
+            ]
+          },
+          "descricao": "Limpa left_on. Falha se o cooperado não está desligado."
+        },
+        {
+          "id": "API-members-delete",
+          "nome": "members.delete",
+          "tipo": "mutation",
+          "acesso": "protected",
+          "roles": [
+            "manager"
+          ],
+          "input": "{ id: Id }",
+          "output": "{ ok: true }",
+          "erros": [
+            "ERR-MEMBER-002",
+            "ERR-MEMBER-004"
+          ],
+          "status": "proposto",
+          "origem": {
+            "tipo": "decisao",
+            "ref": "DEC-007"
+          },
+          "refs": {
+            "entidades": [
+              "EN-cooperado"
+            ],
+            "regras": [
+              "RN-029"
+            ],
+            "politicas": [
+              "PL-003",
+              "PL-006"
+            ],
+            "erros": [
+              "ERR-MEMBER-002",
+              "ERR-MEMBER-004"
+            ],
+            "telas": [
+              "UI-cooperados"
+            ],
+            "fluxos": [
+              "FL-006"
+            ],
+            "testes": [
+              "TS-022"
+            ]
+          },
+          "descricao": "Hard delete, só para cooperado sem presença, vale ou item de fechamento. Audita com snapshot do registro apagado."
         }
       ]
     },
@@ -443,7 +535,7 @@
             "operator"
           ],
           "input": "{ includeInactive?: boolean=false }",
-          "output": "[{ id, name, category, active, sortOrder }]",
+          "output": "[{ id, name, category, defaultCondition, active, sortOrder }]",
           "status": "confirmado",
           "origem": {
             "tipo": "pdf",
@@ -467,7 +559,7 @@
           "roles": [
             "manager"
           ],
-          "input": "{ name: Text, category: MaterialCategory }",
+          "input": "{ name: Text, category: MaterialCategory, defaultCondition?: MaterialCondition=baled }",
           "output": "MaterialType",
           "status": "proposto",
           "origem": {
@@ -483,6 +575,36 @@
             ]
           },
           "descricao": "-"
+        },
+        {
+          "id": "API-materialTypes-lastPrice",
+          "nome": "materialTypes.lastPrice",
+          "tipo": "query",
+          "acesso": "protected",
+          "roles": [
+            "manager",
+            "operator"
+          ],
+          "input": "{ materialTypeId: Id, condition: MaterialCondition, buyerId?: Id, supplierId?: Id } (exatamente um de buyerId/supplierId)",
+          "output": "{ pricePerKg, on: LocalDate } | null",
+          "status": "proposto",
+          "origem": {
+            "tipo": "decisao",
+            "ref": "DEC-009"
+          },
+          "refs": {
+            "entidades": [
+              "EN-item-venda",
+              "EN-item-compra"
+            ],
+            "regras": [
+              "RN-030"
+            ],
+            "telas": [
+              "UI-vendas"
+            ]
+          },
+          "descricao": "Último preço praticado com aquele comprador (em vendas) ou fornecedor (em compras) para material + estado, ignorando registros com deleted_at. Só sugestão; o operador confirma."
         }
       ]
     },
@@ -587,13 +709,15 @@
             "regras": [
               "RN-011",
               "RN-015",
-              "RN-016"
+              "RN-016",
+              "RN-030"
             ],
             "validacoes": [
               "VL-002",
               "VL-003",
               "VL-006",
-              "VL-009"
+              "VL-009",
+              "VL-017"
             ],
             "politicas": [
               "PL-006"
@@ -621,8 +745,8 @@
             "manager",
             "operator"
           ],
-          "input": "{ period?: Period, buyerId?: Id, cursor?: string|null, limit?: number=50 }",
-          "output": "{ items: Sale[], nextCursor, totals: { amount, weightKg } }",
+          "input": "{ period?: Period, buyerId?: Id, materialTypeId?: Id, cursor?: string|null, limit?: number=50 }",
+          "output": "{ items: Sale[], nextCursor, totals: { amount, weightKg }, byMaterial: [{ materialType:{id,name}, condition, amount, weightKg }] }",
           "status": "proposto",
           "origem": {
             "tipo": "complemento",
@@ -678,6 +802,253 @@
             ]
           },
           "descricao": "Soft delete."
+        }
+      ]
+    },
+    {
+      "router": "suppliers",
+      "arquivo": "routers/suppliers.ts",
+      "descricao": "Fornecedores de material: catador avulso (pessoa física), outra cooperativa ou empresa geradora.",
+      "procedures": [
+        {
+          "id": "API-suppliers-list",
+          "nome": "suppliers.list",
+          "tipo": "query",
+          "acesso": "protected",
+          "roles": [
+            "manager",
+            "operator"
+          ],
+          "input": "{ search?: string, kind?: SupplierKind, includeInactive?: boolean=false }",
+          "output": "Supplier[]",
+          "status": "proposto",
+          "origem": {
+            "tipo": "decisao",
+            "ref": "DEC-008"
+          },
+          "refs": {
+            "entidades": [
+              "EN-fornecedor"
+            ],
+            "politicas": [
+              "PL-005"
+            ],
+            "telas": [
+              "UI-vendas"
+            ]
+          },
+          "descricao": "CPF mascarado. Busca por nome, CPF ou CNPJ."
+        },
+        {
+          "id": "API-suppliers-create",
+          "nome": "suppliers.create",
+          "tipo": "mutation",
+          "acesso": "protected",
+          "roles": [
+            "manager",
+            "operator"
+          ],
+          "input": "{ kind: SupplierKind, name: Text, cpf?: Cpf, cnpj?: string, pixKey?: PixKey, phone?: string }",
+          "output": "Supplier",
+          "erros": [
+            "ERR-VAL-001"
+          ],
+          "status": "proposto",
+          "origem": {
+            "tipo": "decisao",
+            "ref": "DEC-008"
+          },
+          "refs": {
+            "entidades": [
+              "EN-fornecedor"
+            ],
+            "validacoes": [
+              "VL-015"
+            ],
+            "politicas": [
+              "PL-006"
+            ],
+            "telas": [
+              "UI-vendas"
+            ]
+          },
+          "descricao": "Operador pode criar inline na tela de compra. Se o CPF já existe na cooperativa, devolve o fornecedor existente em vez de duplicar."
+        }
+      ]
+    },
+    {
+      "router": "purchases",
+      "arquivo": "routers/purchases.ts",
+      "descricao": "Compras de material. Espelho das vendas: mesmo catálogo de material, mesmo cálculo de total no servidor, mesmo soft delete, mesmo bloqueio de mês fechado.",
+      "procedures": [
+        {
+          "id": "API-purchases-create",
+          "nome": "purchases.create",
+          "tipo": "mutation",
+          "acesso": "protected",
+          "roles": [
+            "manager",
+            "operator"
+          ],
+          "input": "{ supplierId: Id, purchasedOn: LocalDate, items: PurchaseItemInput[] (min 1), paymentMethod: PaymentMethod, paidOn?: LocalDate, note?: string }",
+          "output": "Purchase",
+          "erros": [
+            "ERR-PAYOUT-003",
+            "ERR-PURCHASE-001",
+            "ERR-PURCHASE-002",
+            "ERR-VAL-001"
+          ],
+          "status": "proposto",
+          "origem": {
+            "tipo": "decisao",
+            "ref": "DEC-008"
+          },
+          "refs": {
+            "entidades": [
+              "EN-compra",
+              "EN-item-compra"
+            ],
+            "regras": [
+              "RN-011",
+              "RN-015",
+              "RN-016",
+              "RN-030"
+            ],
+            "validacoes": [
+              "VL-002",
+              "VL-003",
+              "VL-006",
+              "VL-014",
+              "VL-017"
+            ],
+            "politicas": [
+              "PL-006"
+            ],
+            "erros": [
+              "ERR-PAYOUT-003",
+              "ERR-PURCHASE-001",
+              "ERR-PURCHASE-002"
+            ],
+            "telas": [
+              "UI-vendas"
+            ],
+            "fluxos": [
+              "FL-008"
+            ],
+            "testes": [
+              "TS-020"
+            ]
+          },
+          "descricao": "Totais calculados no servidor. Transação. paidOn omitido = ainda não pago (UI mostra 'a pagar')."
+        },
+        {
+          "id": "API-purchases-list",
+          "nome": "purchases.list",
+          "tipo": "query",
+          "acesso": "protected",
+          "roles": [
+            "manager",
+            "operator"
+          ],
+          "input": "{ period?: Period, supplierId?: Id, materialTypeId?: Id, cursor?: string|null, limit?: number=50 }",
+          "output": "{ items: Purchase[], nextCursor, totals: { amount, weightKg }, bySupplier: [{ supplier:{id,name}, amount, weightKg }], byMaterial: [{ materialType:{id,name}, condition, amount, weightKg }] }",
+          "status": "proposto",
+          "origem": {
+            "tipo": "decisao",
+            "ref": "DEC-008"
+          },
+          "refs": {
+            "entidades": [
+              "EN-compra"
+            ],
+            "telas": [
+              "UI-vendas"
+            ]
+          },
+          "descricao": "Exclui deleted_at. bySupplier e byMaterial são o 'relatório simples' de compras do mês."
+        },
+        {
+          "id": "API-purchases-delete",
+          "nome": "purchases.delete",
+          "tipo": "mutation",
+          "acesso": "protected",
+          "roles": [
+            "manager"
+          ],
+          "input": "{ id: Id, reason?: string }",
+          "output": "{ ok: true }",
+          "erros": [
+            "ERR-PAYOUT-003",
+            "ERR-PURCHASE-003"
+          ],
+          "status": "proposto",
+          "origem": {
+            "tipo": "decisao",
+            "ref": "DEC-008"
+          },
+          "refs": {
+            "entidades": [
+              "EN-compra"
+            ],
+            "regras": [
+              "RN-011",
+              "RN-022"
+            ],
+            "politicas": [
+              "PL-004",
+              "PL-006"
+            ],
+            "erros": [
+              "ERR-PAYOUT-003",
+              "ERR-PURCHASE-003"
+            ],
+            "telas": [
+              "UI-vendas"
+            ],
+            "fluxos": [
+              "FL-008"
+            ]
+          },
+          "descricao": "Soft delete."
+        },
+        {
+          "id": "API-purchases-receipt",
+          "nome": "purchases.receipt",
+          "tipo": "query",
+          "acesso": "protected",
+          "roles": [
+            "manager",
+            "operator"
+          ],
+          "input": "{ id: Id }",
+          "output": "{ filename, mimeType: 'application/pdf', base64 }",
+          "erros": [
+            "ERR-PURCHASE-003"
+          ],
+          "status": "proposto",
+          "origem": {
+            "tipo": "decisao",
+            "ref": "DEC-008"
+          },
+          "refs": {
+            "entidades": [
+              "EN-compra",
+              "EN-fornecedor"
+            ],
+            "politicas": [
+              "PL-005"
+            ],
+            "erros": [
+              "ERR-PURCHASE-003"
+            ],
+            "telas": [
+              "UI-vendas"
+            ],
+            "fluxos": [
+              "FL-008"
+            ]
+          },
+          "descricao": "Recibo simples: cabeçalho da cooperativa, fornecedor (nome e CPF mascarado / CNPJ), itens com material, estado, peso, preço e subtotal, total, forma de pagamento, data, linha para assinatura. Reusa o gerador de PDF de payouts.export."
         }
       ]
     },
@@ -951,7 +1322,7 @@
               "UI-parametros"
             ]
           },
-          "descricao": "Vigente no período. isDefault = nenhuma linha gravada ainda."
+          "descricao": "Vigente no período. isDefault = nenhuma linha gravada ainda (padrões: 10%, 5%, 0, INSS 7,5%, carry_over)."
         },
         {
           "id": "API-payoutSettings-update",
@@ -961,11 +1332,12 @@
           "roles": [
             "manager"
           ],
-          "input": "{ effectiveFrom: Period, legalReserveRate: Fraction(≥0.10), fatesRate: Fraction(≥0.05), otherFundsRate: Fraction, negativeBalancePolicy: 'forgive'|'carry_over', includeMembersLeftInPeriod: boolean }",
+          "input": "{ effectiveFrom: Period, legalReserveRate: Fraction(≥0.10), fatesRate: Fraction(≥0.05), otherFundsRate: Fraction, inssRate: Fraction(0..0.20), negativeBalancePolicy: 'forgive'|'carry_over', includeMembersLeftInPeriod: boolean }",
           "output": "PayoutSettings",
           "erros": [
             "ERR-SETTINGS-001",
-            "ERR-PAYOUT-003"
+            "ERR-PAYOUT-003",
+            "ERR-SETTINGS-002"
           ],
           "status": "confirmado",
           "origem": {
@@ -978,16 +1350,19 @@
             ],
             "regras": [
               "RN-010",
-              "RN-026"
+              "RN-026",
+              "RN-028"
             ],
             "validacoes": [
-              "VL-013"
+              "VL-013",
+              "VL-016"
             ],
             "politicas": [
               "PL-006"
             ],
             "erros": [
-              "ERR-SETTINGS-001"
+              "ERR-SETTINGS-001",
+              "ERR-SETTINGS-002"
             ],
             "telas": [
               "UI-parametros"
@@ -1038,7 +1413,8 @@
               "RN-012",
               "RN-017",
               "RN-020",
-              "RN-026"
+              "RN-026",
+              "RN-028"
             ],
             "validacoes": [
               "VL-011"
@@ -1058,10 +1434,12 @@
               "TS-005",
               "TS-006",
               "TS-008",
-              "TS-009"
+              "TS-009",
+              "TS-019",
+              "TS-020"
             ]
           },
-          "descricao": "Pura. warnings: ex. 'mês corrente ainda não terminou', 'cooperado X sem presença'."
+          "descricao": "Pura. warnings: ex. 'mês corrente ainda não terminou', 'cooperado X sem presença', 'N cooperados sem desconto de INSS'."
         },
         {
           "id": "API-payouts-close",
@@ -1096,7 +1474,8 @@
               "RN-009",
               "RN-018",
               "RN-019",
-              "RN-025"
+              "RN-025",
+              "RN-028"
             ],
             "politicas": [
               "PL-002",
@@ -1306,7 +1685,7 @@
           "roles": [
             "manager"
           ],
-          "input": "{ id: Id, format: 'csv'|'pdf' }",
+          "input": "{ id: Id, format: 'csv'|'pdf', report?: 'payout'|'inss' = 'payout' }",
           "output": "{ filename, mimeType, base64 }",
           "erros": [
             "ERR-PAYOUT-006"
@@ -1318,17 +1697,22 @@
           },
           "refs": {
             "entidades": [
-              "EN-fechamento"
+              "EN-fechamento",
+              "EN-fechamento-item"
             ],
             "politicas": [
-              "PL-005"
+              "PL-005",
+              "PL-006"
             ],
             "telas": [
               "UI-historico-fechamentos",
               "UI-fechamento"
+            ],
+            "regras": [
+              "RN-028"
             ]
           },
-          "descricao": "Alternativa: route handler /api/payouts/[id]/export para stream. Decidir na implementação."
+          "descricao": "report = payout: demonstrativo completo (por cooperado: dias, bruto, INSS, vales, líquido). report = inss: relatório 'INSS do mês' para o contador gerar a guia: nome, CPF completo, base, alíquota, valor retido, total. É a única exportação com CPF completo; gera audit_log (PL-005). Alternativa: route handler /api/payouts/[id]/export para stream. Decidir na implementação."
         }
       ]
     }

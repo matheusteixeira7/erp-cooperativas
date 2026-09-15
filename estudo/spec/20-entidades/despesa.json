@@ -7,7 +7,7 @@
     { "nome": "id", "tipo": "TP-Id", "pk": true },
     { "nome": "cooperative_id", "tipo": "TP-Id", "fk": "EN-cooperativa", "obrigatorio": true },
     { "nome": "description", "tipo": "TP-Texto", "obrigatorio": true, "pdf": "descricao VARCHAR(150)" },
-    { "nome": "category", "tipo": "string", "obrigatorio": false, "sugestoes": ["aluguel", "energia", "agua", "combustivel", "manutencao", "aterro", "alimentacao", "epi", "outros"], "origem": "complemento" },
+    { "nome": "category", "tipo": "string", "obrigatorio": false, "sugestoes": ["aluguel", "energia", "agua", "combustivel", "manutencao", "aterro", "alimentacao", "epi", "inss_patronal", "outros"], "origem": "complemento", "nota": "Compra de material NÃO é despesa: tem entidade própria (EN-compra). Se a cooperativa pagar parte patronal de INSS, lança aqui como inss_patronal (DEC-006)." },
     { "nome": "amount", "tipo": "TP-DinheiroBRL", "obrigatorio": true, "pdf": "valor" },
     { "nome": "incurred_on", "tipo": "TP-DataLocal", "obrigatorio": true, "pdf": "data_despesa" },
     { "nome": "deleted_at", "tipo": "TP-Timestamp", "obrigatorio": false },

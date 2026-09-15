@@ -69,17 +69,27 @@ for i, node, arquivo in registros:
             erros.append(f"{i} status inválido: {node.get('status')} ({arquivo})")
     checar_refs(node, arquivo, i)
 
-# ---- fixtures: recalcular pelas regras RN-001..RN-012 ----
+# ---- fixtures: recalcular pelas regras RN-001..RN-012 e RN-028 ----
 D = lambda x: Decimal(str(x))
 def round2(x): return x.quantize(Decimal("0.01"), rounding=ROUND_HALF_EVEN)
 def floor2(x): return x.quantize(Decimal("0.01"), rounding=ROUND_FLOOR)
+CONDICOES = {"loose", "baled"}  # TP-EstadoMaterial
+
+def total_itens(docs_):
+    """RN-015: subtotal = round2(peso × preço); total = Σ subtotais. Vale para vendas e compras."""
+    return sum((round2(D(i["weightKg"]) * D(i["pricePerKg"])) for d in docs_ for i in d["items"]), Decimal(0))
 
 def calcular(fx):
     s = fx["settings"]
-    receita = sum((round2(D(i["weightKg"]) * D(i["pricePerKg"])) for v in fx["sales"] for i in v["items"]), Decimal(0))
+    for d in fx["sales"] + fx.get("purchases", []):
+        for i in d["items"]:
+            if i.get("condition") not in CONDICOES:
+                raise ValueError(f"item '{i.get('material')}' sem condition válida (RN-030/VL-017)")
+    receita = total_itens(fx["sales"])
+    compras = total_itens(fx.get("purchases", []))
     despesas = sum((D(e["amount"]) for e in fx["expenses"]), Decimal(0))
-    sobra = receita - despesas
-    out = {"grossRevenue": receita, "totalExpenses": despesas, "surplus": sobra}
+    sobra = receita - compras - despesas  # RN-003
+    out = {"grossRevenue": receita, "totalPurchases": compras, "totalExpenses": despesas, "surplus": sobra}
     if sobra <= 0:
         out["erro"] = "ERR-PAYOUT-001"; return out
     reserva = round2(sobra * D(s["legalReserveRate"])); fates = round2(sobra * D(s["fatesRate"])); outros = round2(sobra * D(s["otherFundsRate"]))
@@ -89,19 +99,25 @@ def calcular(fx):
     if dias == 0:
         out["erro"] = "ERR-PAYOUT-002"; return out
     diaria = floor2(dist / dias)
-    items, novos, tot_net, tot_ded, tot_gross = [], [], Decimal(0), Decimal(0), Decimal(0)
+    inss_rate = D(s.get("inssRate", 0))
+    assert Decimal(0) <= inss_rate <= D("0.20"), "VL-016: inssRate fora da faixa"
+    items, novos, tot_net, tot_ded, tot_gross, tot_inss = [], [], Decimal(0), Decimal(0), Decimal(0), Decimal(0)
     for m in fx["members"]:
         gross = round2(D(m["workedDays"]) * diaria)
+        inss = round2(gross * inss_rate) if m.get("inssWithheld", True) else Decimal(0)  # RN-028
         ded = sum((D(a["amount"]) for a in m["advances"]), Decimal(0))
-        net = max(Decimal(0), gross - ded)
-        carry = max(Decimal(0), ded - gross) if s["negativeBalancePolicy"] == "carry_over" else Decimal(0)
+        base = gross - inss  # RN-002: INSS antes dos vales
+        net = max(Decimal(0), base - ded)
+        nao_coberto = max(Decimal(0), ded - base)
+        carry = nao_coberto if s["negativeBalancePolicy"] == "carry_over" else Decimal(0)  # RN-009
+        assert gross == inss + net + ded - nao_coberto, "identidade bruto = INSS + líquido + vales − parte não coberta violada"
         if carry > 0:
             y, mo = map(int, fx["period"].split("-")); mo += 1
             if mo == 13: mo, y = 1, y + 1
             novos.append({"member": m["id"], "kind": "carry_over", "amount": carry, "grantedOn": f"{y:04d}-{mo:02d}-01", "status": "pending"})
-        items.append({"member": m["id"], "workedDays": m["workedDays"], "grossAmount": gross, "deductionsAmount": ded, "netAmount": net, "carryOverDebt": carry})
-        tot_net += net; tot_ded += ded; tot_gross += gross
-    out.update(dayValue=diaria, distributedTotal=tot_gross, roundingResidual=dist - tot_gross, items=items, totalNet=tot_net, totalDeductions=tot_ded, newCarryOverAdvances=novos)
+        items.append({"member": m["id"], "workedDays": m["workedDays"], "grossAmount": gross, "inssBase": gross, "inssAmount": inss, "deductionsAmount": ded, "netAmount": net, "carryOverDebt": carry})
+        tot_net += net; tot_ded += ded; tot_gross += gross; tot_inss += inss
+    out.update(dayValue=diaria, distributedTotal=tot_gross, roundingResidual=dist - tot_gross, items=items, inssTotal=tot_inss, totalNet=tot_net, totalDeductions=tot_ded, newCarryOverAdvances=novos)
     assert Decimal(0) <= out["roundingResidual"] < D(dias) * D("0.01"), "invariante RN-012 violada"
     return out
 

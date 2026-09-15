@@ -2,14 +2,16 @@
   "id": "EN-item-venda", "nome": "Item de venda", "tabela": "sale_items", "tipo_ts": "SaleItem",
   "descricao": "Um material pesado dentro de uma venda.",
   "status": "confirmado", "origem": { "tipo": "pdf", "ref": "p.3 CREATE TABLE itens_venda" },
-  "refs": { "tipos": ["TP-PesoKg", "TP-PrecoPorKg", "TP-DinheiroBRL"], "entidades": ["EN-venda", "EN-tipo-material"], "regras": ["RN-015"], "validacoes": ["VL-002", "VL-003"], "telas": ["UI-vendas"] },
+  "refs": { "tipos": ["TP-PesoKg", "TP-PrecoPorKg", "TP-DinheiroBRL", "TP-EstadoMaterial"], "entidades": ["EN-venda", "EN-tipo-material"], "regras": ["RN-015", "RN-030"], "validacoes": ["VL-002", "VL-003", "VL-017"], "api": ["API-materialTypes-lastPrice"], "telas": ["UI-vendas"], "decisoes": ["DEC-009"] },
   "campos": [
     { "nome": "id", "tipo": "TP-Id", "pk": true },
     { "nome": "sale_id", "tipo": "TP-Id", "fk": "EN-venda", "obrigatorio": true, "on_delete": "cascade" },
     { "nome": "material_type_id", "tipo": "TP-Id", "fk": "EN-tipo-material", "obrigatorio": true },
+    { "nome": "condition", "tipo": "TP-EstadoMaterial", "obrigatorio": true, "descricao": "Solto ou prensado. Pré-preenchido com material_types.default_condition; gravado no item e imutável (RN-030).", "origem": "decisao (DEC-009)" },
     { "nome": "weight_kg", "tipo": "TP-PesoKg", "obrigatorio": true },
-    { "nome": "price_per_kg", "tipo": "TP-PrecoPorKg", "obrigatorio": true },
+    { "nome": "price_per_kg", "tipo": "TP-PrecoPorKg", "obrigatorio": true, "descricao": "Preço para a combinação material + estado." },
     { "nome": "subtotal", "tipo": "TP-DinheiroBRL", "descricao": "round_half_even(weight_kg × price_per_kg, 2). Coluna gerada ou calculada no serviço; nunca aceita do cliente.", "pdf": "GENERATED ALWAYS AS (peso_kg * preco_por_kg)" },
-    { "nome": "bale_count", "tipo": "integer", "obrigatorio": false, "descricao": "Quantos fardos. Informativo.", "origem": "complemento" }
-  ]
+    { "nome": "bale_count", "tipo": "integer", "obrigatorio": false, "descricao": "Quantos fardos. Informativo. Só faz sentido quando condition = baled.", "origem": "complemento" }
+  ],
+  "indices": ["INDEX (material_type_id, condition)"]
 }

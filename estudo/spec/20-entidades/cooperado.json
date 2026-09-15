@@ -2,7 +2,7 @@
   "id": "EN-cooperado", "nome": "Cooperado", "tabela": "members", "tipo_ts": "Member",
   "descricao": "Pessoa associada que trabalha e participa do rateio.",
   "status": "confirmado", "origem": { "tipo": "pdf", "ref": "p.3 CREATE TABLE cooperados" },
-  "refs": { "tipos": ["TP-CPF", "TP-ChavePix", "TP-DataLocal"], "entidades": ["EN-cooperativa", "EN-presenca", "EN-vale", "EN-fechamento-item"], "regras": ["RN-007"], "validacoes": ["VL-001", "VL-007", "VL-008", "VL-012"], "api": ["API-members-list", "API-members-create", "API-members-update", "API-members-deactivate"], "telas": ["UI-cooperados"] },
+  "refs": { "tipos": ["TP-CPF", "TP-ChavePix", "TP-DataLocal"], "entidades": ["EN-cooperativa", "EN-presenca", "EN-vale", "EN-fechamento-item"], "regras": ["RN-007", "RN-028", "RN-029"], "validacoes": ["VL-001", "VL-007", "VL-008", "VL-012"], "api": ["API-members-list", "API-members-create", "API-members-update", "API-members-deactivate", "API-members-reactivate", "API-members-delete"], "telas": ["UI-cooperados"], "decisoes": ["DEC-006", "DEC-007"] },
   "campos": [
     { "nome": "id", "tipo": "TP-Id", "pk": true },
     { "nome": "cooperative_id", "tipo": "TP-Id", "fk": "EN-cooperativa", "obrigatorio": true },
@@ -12,10 +12,11 @@
     { "nome": "phone", "tipo": "string", "obrigatorio": false, "origem": "complemento" },
     { "nome": "admitted_on", "tipo": "TP-DataLocal", "obrigatorio": true, "padrao": "hoje", "pdf": "data_admissao" },
     { "nome": "left_on", "tipo": "TP-DataLocal", "obrigatorio": false, "descricao": "Data de desligamento. Substitui o boolean 'ativo' do pdf: ativo = left_on IS NULL.", "origem": "complemento" },
+    { "nome": "inss_withheld", "tipo": "boolean", "obrigatorio": true, "padrao": true, "descricao": "Contribui INSS pelo sistema. false para aposentado, MEI ou quem recolhe por fora: INSS zero no demonstrativo, com marcação (RN-028).", "origem": "decisao (DEC-006)" },
     { "nome": "notes", "tipo": "text", "obrigatorio": false },
     { "nome": "created_at", "tipo": "TP-Timestamp" }, { "nome": "updated_at", "tipo": "TP-Timestamp" }
   ],
   "indices": ["UNIQUE (cooperative_id, cpf)", "INDEX (cooperative_id, left_on)"],
-  "invariantes": ["left_on ≥ admitted_on.", "Não se apaga cooperado com presenças ou vales: desliga (left_on)."],
-  "ciclo_de_vida": "ativo (left_on null) → desligado (left_on preenchido). Reativação = novo registro ou limpar left_on (decisão do gestor, auditada)."
+  "invariantes": ["left_on ≥ admitted_on.", "Não se apaga cooperado com presenças, vales ou itens de fechamento: desliga (left_on). Sem nenhum lançamento pode ser removido de verdade (RN-029)."],
+  "ciclo_de_vida": "ativo (left_on null) → desligado (left_on preenchido) → ativo de novo (members.reactivate limpa left_on, auditado). Hard delete só sem lançamentos (members.delete)."
 }

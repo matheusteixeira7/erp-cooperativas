@@ -1,7 +1,7 @@
 {
   "nome": "ERP Cooperativas (Recicla ERP)",
-  "versao": "0.3.0",
-  "atualizado_em": "2026-09-08",
+  "versao": "0.4.0",
+  "atualizado_em": "2026-09-14",
   "descricao": "Spec executável para agentes de IA. ERP para cooperativas de trabalho de materiais recicláveis. Rateio de sobras por dias trabalhados, com fundos legais retidos antes da distribuição.",
   "fonte_primaria": {
     "tipo": "pdf",
@@ -48,6 +48,38 @@
       "decisao": "Multi-cooperativa desde o início: toda tabela de negócio tem cooperative_id, vindo da sessão, nunca do cliente.",
       "por": "Matheus",
       "status": "confirmado"
+    },
+    {
+      "data": "2026-09-14",
+      "id": "DEC-006",
+      "decisao": "INSS do cooperado (REQ-01): alíquota configurável por cooperativa com histórico de vigência, padrão 7,5% como o cliente pediu. Base = bruto do mês antes dos vales. Ordem: fundos → diária → bruto → INSS → vales → líquido; saldo devedor sobre bruto − INSS. Sem teto e sem parte patronal na v1 (parte patronal, se existir, vira despesa 'inss_patronal'). Cooperado tem flag inss_withheld (padrão sim). Relatório 'INSS do mês' com CPF completo para o contador. Pendência não bloqueante: contador confirmar a alíquota (Lei 10.666/03 fala em 11%).",
+      "por": "Claude, por delegação de Matheus (cliente sem contato)",
+      "status": "proposto",
+      "afeta": ["RN-002", "RN-009", "RN-028", "VL-016", "EN-parametros-rateio", "EN-cooperado", "EN-fechamento", "EN-fechamento-item", "API-payouts-export", "UI-parametros", "UI-fechamento", "UI-extrato-cooperado", "UI-cooperados", "TK-025"]
+    },
+    {
+      "data": "2026-09-14",
+      "id": "DEC-007",
+      "decisao": "Cooperados (REQ-02): 'excluir' = desligar com data; hard delete só quando não há presença, vale nem item de fechamento; reativar limpa left_on. Só gestor cadastra (operador só vê). Importação de planilha na implantação é script one-off do time, não feature do sistema.",
+      "por": "Claude, por delegação de Matheus (cliente sem contato)",
+      "status": "proposto",
+      "afeta": ["RN-029", "PL-003", "API-members-reactivate", "API-members-delete", "UI-cooperados", "FL-006", "TK-026"]
+    },
+    {
+      "data": "2026-09-14",
+      "id": "DEC-008",
+      "decisao": "Compras de material (REQ-03): entidades fornecedor, compra e item de compra; mesmo catálogo de material das vendas; total no servidor; soft delete; bloqueio de mês fechado. Compras reduzem a sobra (sobra = vendas − compras − despesas) e aparecem como linha própria no fechamento. Fornecedor pode ser pessoa física (CPF opcional, PIX) ou empresa (CNPJ). Cooperado que vende material próprio é fornecedor pessoa física comum, pago na hora, fora do rateio. Recibo de compra em PDF na v1. Estoque continua fase 2: v1 é só o financeiro.",
+      "por": "Claude, por delegação de Matheus (cliente sem contato)",
+      "status": "proposto",
+      "afeta": ["RN-003", "RN-011", "RN-015", "RN-016", "RN-022", "EN-fornecedor", "EN-compra", "EN-item-compra", "EN-fechamento", "FL-008", "UI-vendas", "UI-fechamento", "TK-024"]
+    },
+    {
+      "data": "2026-09-14",
+      "id": "DEC-009",
+      "decisao": "Estado do material (REQ-04): enum material_condition com loose (solto) e baled (prensado), obrigatório em item de venda e de compra, gravado no item e imutável. default_condition por tipo de material. Enum de banco, não tabela: o cliente citou só dois estados e adicionar outro é uma migration de uma linha. Preço é negociado a cada lançamento (não há tabela fixa); o sistema sugere o último preço praticado com o mesmo comprador/fornecedor para material + estado, já na v1.",
+      "por": "Claude, por delegação de Matheus (cliente sem contato)",
+      "status": "proposto",
+      "afeta": ["TP-EstadoMaterial", "RN-030", "VL-017", "EN-item-venda", "EN-item-compra", "EN-tipo-material", "API-materialTypes-lastPrice", "UI-vendas", "TK-023"]
     }
   ],
   "convencoes": {

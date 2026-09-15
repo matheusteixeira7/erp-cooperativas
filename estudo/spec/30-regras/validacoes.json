@@ -31,7 +31,7 @@
     {
       "id": "VL-002",
       "nome": "Peso positivo",
-      "campo": "sale_items.weight_kg",
+      "campo": "sale_items.weight_kg, purchase_items.weight_kg",
       "condicao": "> 0, até 2 casas",
       "mensagem": "Informe um peso maior que zero.",
       "status": "confirmado",
@@ -44,15 +44,16 @@
           "TP-PesoKg"
         ],
         "entidades": [
-          "EN-item-venda"
+          "EN-item-venda",
+          "EN-item-compra"
         ]
       },
-      "descricao": "sale_items.weight_kg: > 0, até 2 casas."
+      "descricao": "sale_items.weight_kg e purchase_items.weight_kg: > 0, até 2 casas."
     },
     {
       "id": "VL-003",
       "nome": "Preço por kg positivo",
-      "campo": "sale_items.price_per_kg",
+      "campo": "sale_items.price_per_kg, purchase_items.price_per_kg",
       "condicao": "> 0, até 4 casas",
       "mensagem": "Informe um preço por kg maior que zero.",
       "status": "confirmado",
@@ -65,10 +66,11 @@
           "TP-PrecoPorKg"
         ],
         "entidades": [
-          "EN-item-venda"
+          "EN-item-venda",
+          "EN-item-compra"
         ]
       },
-      "descricao": "sale_items.price_per_kg: > 0, até 4 casas."
+      "descricao": "sale_items.price_per_kg e purchase_items.price_per_kg: > 0, até 4 casas."
     },
     {
       "id": "VL-004",
@@ -109,7 +111,7 @@
     {
       "id": "VL-006",
       "nome": "Datas de lançamento não podem ser futuras",
-      "campo": "attendances.date, sales.sold_on, expenses.incurred_on, advances.granted_on",
+      "campo": "attendances.date, sales.sold_on, purchases.purchased_on, expenses.incurred_on, advances.granted_on",
       "condicao": "≤ hoje (fuso da cooperativa)",
       "mensagem": "A data não pode ser futura.",
       "status": "proposto",
@@ -124,11 +126,12 @@
         "entidades": [
           "EN-presenca",
           "EN-venda",
+          "EN-compra",
           "EN-despesa",
           "EN-vale"
         ]
       },
-      "descricao": "attendances.date, sales.sold_on, expenses.incurred_on, advances.granted_on: ≤ hoje (fuso da cooperativa)."
+      "descricao": "attendances.date, sales.sold_on, purchases.purchased_on, expenses.incurred_on, advances.granted_on: ≤ hoje (fuso da cooperativa)."
     },
     {
       "id": "VL-007",
@@ -274,6 +277,100 @@
         ]
       },
       "descricao": "payout_settings.*_rate: legal_reserve_rate ≥ 0.10; fates_rate ≥ 0.05; soma < 1."
+    },
+    {
+      "id": "VL-014",
+      "nome": "Fornecedor obrigatório e existente",
+      "campo": "purchases.supplier_id",
+      "condicao": "uuid de supplier ativo da mesma cooperativa",
+      "mensagem": "Selecione o fornecedor.",
+      "erro_inexistente": "ERR-PURCHASE-002",
+      "status": "proposto",
+      "origem": {
+        "tipo": "decisao",
+        "ref": "DEC-008"
+      },
+      "refs": {
+        "entidades": [
+          "EN-fornecedor",
+          "EN-compra"
+        ],
+        "erros": [
+          "ERR-PURCHASE-002"
+        ]
+      },
+      "descricao": "purchases.supplier_id: uuid de supplier ativo da mesma cooperativa."
+    },
+    {
+      "id": "VL-015",
+      "nome": "Documento do fornecedor",
+      "campo": "suppliers.cpf, suppliers.cnpj",
+      "condicao": "kind = individual: cpf opcional, mas se informado precisa ser válido (TP-CPF) e único na cooperativa; kind = company: cnpj obrigatório, 14 dígitos, único na cooperativa. Nome não precisa ser único (dois catadores podem se chamar José).",
+      "mensagem": "CPF ou CNPJ inválido.",
+      "status": "proposto",
+      "origem": {
+        "tipo": "decisao",
+        "ref": "DEC-008"
+      },
+      "refs": {
+        "tipos": [
+          "TP-CPF",
+          "TP-TipoFornecedor"
+        ],
+        "entidades": [
+          "EN-fornecedor"
+        ]
+      },
+      "descricao": "suppliers.cpf / suppliers.cnpj conforme o tipo do fornecedor."
+    },
+    {
+      "id": "VL-016",
+      "nome": "Alíquota de INSS dentro da faixa",
+      "campo": "payout_settings.inss_rate",
+      "condicao": "0 ≤ inss_rate ≤ 0.20",
+      "mensagem": "A alíquota de INSS deve ficar entre 0% e 20%.",
+      "status": "proposto",
+      "origem": {
+        "tipo": "decisao",
+        "ref": "DEC-006"
+      },
+      "refs": {
+        "tipos": [
+          "TP-Percentual"
+        ],
+        "entidades": [
+          "EN-parametros-rateio"
+        ],
+        "regras": [
+          "RN-028"
+        ]
+      },
+      "descricao": "payout_settings.inss_rate: entre 0 e 0.20. Zero desliga o desconto para a cooperativa toda."
+    },
+    {
+      "id": "VL-017",
+      "nome": "Estado do material obrigatório",
+      "campo": "sale_items.condition, purchase_items.condition",
+      "condicao": "valor de TP-EstadoMaterial (loose | baled)",
+      "mensagem": "Informe se o material é solto ou prensado.",
+      "status": "proposto",
+      "origem": {
+        "tipo": "decisao",
+        "ref": "DEC-009"
+      },
+      "refs": {
+        "tipos": [
+          "TP-EstadoMaterial"
+        ],
+        "entidades": [
+          "EN-item-venda",
+          "EN-item-compra"
+        ],
+        "regras": [
+          "RN-030"
+        ]
+      },
+      "descricao": "sale_items.condition e purchase_items.condition: obrigatório, um dos valores do enum."
     }
   ]
 }

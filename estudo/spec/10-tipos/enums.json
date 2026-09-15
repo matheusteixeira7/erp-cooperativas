@@ -12,6 +12,36 @@
       "refs": { "entidades": ["EN-tipo-material"] }
     },
     {
+      "id": "TP-EstadoMaterial", "nome": "EstadoMaterial", "codigo": "material_condition",
+      "descricao": "Em que estado o material foi pesado: solto (como chegou) ou prensado (fardo). Preço por kg muda com o estado. Enum de banco na v1: acrescentar um valor (moído, bag) é uma migration de uma linha; o cliente só citou dois estados (DEC-009).",
+      "valores": [
+        { "codigo": "loose", "rotulo": "Solto" },
+        { "codigo": "baled", "rotulo": "Prensado", "descricao": "Fardo. É o padrão da maioria dos materiais vendidos." }
+      ],
+      "status": "proposto", "origem": { "tipo": "decisao", "ref": "DEC-009 (2026-09-14), pedido do cliente Jailson" },
+      "refs": { "entidades": ["EN-item-venda", "EN-item-compra", "EN-tipo-material"], "regras": ["RN-030"], "validacoes": ["VL-017"], "decisoes": ["DEC-009"] }
+    },
+    {
+      "id": "TP-TipoFornecedor", "nome": "TipoFornecedor", "codigo": "supplier_kind",
+      "descricao": "Pessoa física (catador avulso) ou empresa (outra cooperativa, gerador com CNPJ). Define quais documentos o cadastro pede (VL-015).",
+      "valores": [
+        { "codigo": "individual", "rotulo": "Pessoa física" },
+        { "codigo": "company", "rotulo": "Empresa / cooperativa" }
+      ],
+      "status": "proposto", "origem": { "tipo": "decisao", "ref": "DEC-008 (2026-09-14)" },
+      "refs": { "entidades": ["EN-fornecedor"], "validacoes": ["VL-015"], "decisoes": ["DEC-008"] }
+    },
+    {
+      "id": "TP-FormaPagamento", "nome": "FormaPagamento", "codigo": "payment_method",
+      "descricao": "Como a compra foi paga ao fornecedor.",
+      "valores": [
+        { "codigo": "cash", "rotulo": "Dinheiro" },
+        { "codigo": "pix", "rotulo": "PIX" }
+      ],
+      "status": "proposto", "origem": { "tipo": "decisao", "ref": "DEC-008 (2026-09-14)" },
+      "refs": { "entidades": ["EN-compra"], "decisoes": ["DEC-008"] }
+    },
+    {
       "id": "TP-StatusFechamento", "nome": "StatusFechamento", "codigo": "payout_status",
       "descricao": "Ciclo de vida do fechamento mensal.",
       "valores": [
