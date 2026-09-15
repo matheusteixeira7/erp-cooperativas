@@ -92,6 +92,15 @@ export function activeMembersOn(members: Member[], date: string) {
   return members.filter((m) => m.admittedOn <= date && (!m.leftOn || m.leftOn >= date))
 }
 
+/** RN-029: a member with any attendance, advance or payout item can only be deactivated, never hard-deleted. */
+export function memberHasRecords(data: DemoData, memberId: string) {
+  return (
+    data.attendances.some((a) => a.memberId === memberId) ||
+    data.advances.some((a) => a.memberId === memberId) ||
+    data.payouts.some((p) => p.items.some((i) => i.memberId === memberId))
+  )
+}
+
 export type LastPriceQuery = {
   materialTypeId: string
   condition: MaterialCondition
@@ -175,6 +184,10 @@ export type DemoActions = {
   createMember(input: Omit<Member, "id" | "leftOn">): Promise<Member>
   updateMember(id: string, input: Partial<Omit<Member, "id">>): Promise<Member>
   deactivateMember(id: string, leftOn: string): Promise<void>
+  /** Limpa left_on. Falha se o cooperado não está desligado (RN-029). */
+  reactivateMember(id: string): Promise<Member>
+  /** Hard delete, só para cooperado sem presença, vale ou item de fechamento (RN-029). */
+  deleteMember(id: string): Promise<void>
   saveSettings(input: Omit<PayoutSettingsVersion, "id" | "createdAt" | "isLegalDefault">): Promise<PayoutSettingsVersion>
 }
 
@@ -618,6 +631,25 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
             next: { ...current, members: current.members.map((m) => (m.id === id ? { ...m, leftOn } : m)) },
             result: undefined,
           }
+        })
+      },
+
+      async reactivateMember(id) {
+        return run((current) => {
+          const existing = current.members.find((m) => m.id === id)
+          if (!existing) throw new DemoError("ERR-MEMBER-002")
+          if (!existing.leftOn) throw new DemoError("ERR-MEMBER-005")
+          const updated: Member = { ...existing, leftOn: null }
+          return { next: { ...current, members: current.members.map((m) => (m.id === id ? updated : m)) }, result: updated }
+        })
+      },
+
+      async deleteMember(id) {
+        return run((current) => {
+          const existing = current.members.find((m) => m.id === id)
+          if (!existing) throw new DemoError("ERR-MEMBER-002")
+          if (memberHasRecords(current, id)) throw new DemoError("ERR-MEMBER-004")
+          return { next: { ...current, members: current.members.filter((m) => m.id !== id) }, result: undefined }
         })
       },
 

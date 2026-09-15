@@ -12,6 +12,8 @@ export const ERROR_MESSAGES = {
   "ERR-MEMBER-001": "Já existe um cooperado com este CPF.",
   "ERR-MEMBER-002": "Cooperado não encontrado.",
   "ERR-MEMBER-003": "Cooperado não estava ativo nesta data.",
+  "ERR-MEMBER-004": "Este cooperado tem presenças, vales ou fechamentos e não pode ser excluído. Use “Desligar”.",
+  "ERR-MEMBER-005": "Este cooperado já está ativo.",
   "ERR-SALE-001": "Adicione pelo menos um material à venda.",
   "ERR-SALE-002": "Comprador ou tipo de material não encontrado.",
   "ERR-SALE-003": "Venda não encontrada.",

@@ -3,7 +3,37 @@
 import { describe, expect, it } from "vitest"
 
 import { createSeed } from "./seed"
-import { lastPricePerKg } from "./store"
+import { lastPricePerKg, memberHasRecords } from "./store"
+
+describe("memberHasRecords (RN-029, exclusão real só sem lançamentos)", () => {
+  it("cooperado com presença, vale ou fechamento tem lançamentos", () => {
+    const data = createSeed()
+    expect(memberHasRecords(data, "m1")).toBe(true) // presenças e vales
+    expect(memberHasRecords(data, "m8")).toBe(true) // desligado, mas está no fechamento de julho
+  })
+
+  it("cooperado recém-cadastrado sem nada pode ser excluído", () => {
+    const data = createSeed()
+    data.members.push({
+      id: "m-novo",
+      name: "Cadastrado Por Engano",
+      cpf: "39053344705",
+      pixKey: "",
+      phone: "",
+      admittedOn: "2026-09-14",
+      leftOn: null,
+      inssWithheld: true,
+      notes: "",
+      hasAccess: false,
+    })
+    expect(memberHasRecords(data, "m-novo")).toBe(false)
+  })
+
+  it("compras com fornecedor não contam como lançamento do cooperado", () => {
+    const data = createSeed()
+    expect(memberHasRecords(data, "sup-ze")).toBe(false)
+  })
+})
 
 describe("lastPricePerKg (RN-030, sugestão de preço)", () => {
   it("devolve o último preço praticado com o comprador para material + estado", () => {
