@@ -25,6 +25,7 @@ export type PayoutTotals = {
   dayValue: number
   distributedTotal: number
   roundingResidual: number
+  inssTotal: number
   totalDeductions: number
   totalNet: number
 }
@@ -34,6 +35,8 @@ export type PayoutRow = {
   memberName: string
   workedDays: number
   grossAmount: number
+  inssRate: number
+  inssAmount: number
   deductionsAmount: number
   netAmount: number
   carryOverDebt: number
@@ -51,8 +54,9 @@ export function PayoutSummaryCards({
   showSettingsLink?: boolean
 }) {
   const t = totals
+  const showInss = settings.inssRate > 0 || (t ? t.inssTotal > 0 : false)
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       <StatCard loading={loading} label="Receita de vendas" value={t ? formatMoney(t.grossRevenue) : "—"} hint="Vendas do mês, pela data da venda" />
       <StatCard loading={loading} label="Compras de material" value={t ? `− ${formatMoney(t.totalPurchases)}` : "—"} hint="Material comprado de catadores e cooperativas" />
       <StatCard loading={loading} label="Despesas" value={t ? `− ${formatMoney(t.totalExpenses)}` : "—"} hint={t ? `Sobra: ${formatMoney(t.surplus)}` : "Sobra = vendas − compras − despesas"} />
@@ -81,6 +85,14 @@ export function PayoutSummaryCards({
         value={t ? formatMoney(t.dayValue) : "—"}
         hint={t ? `baseado em ${formatInteger(t.totalWorkedDays)} diárias` : undefined}
       />
+      {showInss && (
+        <StatCard
+          loading={loading}
+          label="INSS retido no mês"
+          value={t ? `− ${formatMoney(t.inssTotal)}` : "—"}
+          hint={`${formatPercent(settings.inssRate)} sobre o bruto de cada cooperado, antes dos vales. A cooperativa recolhe via guia.`}
+        />
+      )}
     </div>
   )
 }
@@ -88,6 +100,7 @@ export function PayoutSummaryCards({
 export function PayoutTable({
   rows,
   totals,
+  showInss,
   renderRowStart,
   renderRowEnd,
   headStart,
@@ -95,12 +108,15 @@ export function PayoutTable({
 }: {
   rows: PayoutRow[]
   totals: PayoutTotals
+  /** Mostra a coluna INSS. Padrão: só quando houve retenção. */
+  showInss?: boolean
   renderRowStart?: (row: PayoutRow) => React.ReactNode
   renderRowEnd?: (row: PayoutRow) => React.ReactNode
   headStart?: React.ReactNode
   headEnd?: React.ReactNode
 }) {
   const hasDebt = rows.some((r) => r.carryOverDebt > 0)
+  const inssColumn = showInss ?? totals.inssTotal > 0
   return (
     <Table>
       <TableHeader>
@@ -109,6 +125,7 @@ export function PayoutTable({
           <TableHead>Cooperado</TableHead>
           <TableHead className="text-right">Dias</TableHead>
           <TableHead className="text-right">Bruto</TableHead>
+          {inssColumn && <TableHead className="text-right">INSS</TableHead>}
           <TableHead className="text-right">Vales</TableHead>
           <TableHead className="text-right">Líquido</TableHead>
           {hasDebt && <TableHead className="text-right">Saldo devedor</TableHead>}
@@ -120,13 +137,17 @@ export function PayoutTable({
           <TableRow key={row.key} className={cn(row.workedDays === 0 && "text-muted-foreground")}>
             {renderRowStart?.(row)}
             <TableCell className="font-medium">
-              <span className="flex items-center gap-2">
+              <span className="flex flex-wrap items-center gap-2">
                 {row.memberName}
                 {row.workedDays === 0 && <Badge variant="outline">sem presença</Badge>}
+                {inssColumn && row.inssRate === 0 && row.workedDays > 0 && <Badge variant="outline">sem INSS</Badge>}
               </span>
             </TableCell>
             <TableCell className="text-right tabular-nums">{row.workedDays}</TableCell>
             <TableCell className="text-right tabular-nums">{formatMoney(row.grossAmount)}</TableCell>
+            {inssColumn && (
+              <TableCell className="text-right tabular-nums">{row.inssAmount > 0 ? `− ${formatMoney(row.inssAmount)}` : "—"}</TableCell>
+            )}
             <TableCell className="text-right tabular-nums">{row.deductionsAmount > 0 ? `− ${formatMoney(row.deductionsAmount)}` : "—"}</TableCell>
             <TableCell className="text-right font-semibold tabular-nums">{formatMoney(row.netAmount)}</TableCell>
             {hasDebt && (
@@ -156,6 +177,7 @@ export function PayoutTable({
           </TableCell>
           <TableCell className="text-right font-medium tabular-nums">{formatInteger(totals.totalWorkedDays)}</TableCell>
           <TableCell className="text-right font-medium tabular-nums">{formatMoney(totals.distributedTotal)}</TableCell>
+          {inssColumn && <TableCell className="text-right font-medium tabular-nums">− {formatMoney(totals.inssTotal)}</TableCell>}
           <TableCell className="text-right font-medium tabular-nums">− {formatMoney(totals.totalDeductions)}</TableCell>
           <TableCell className="text-right font-semibold tabular-nums">{formatMoney(totals.totalNet)}</TableCell>
           {hasDebt && <TableCell />}

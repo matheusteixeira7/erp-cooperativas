@@ -22,6 +22,7 @@ export const ERROR_MESSAGES = {
   "ERR-ADVANCE-001": "Este vale já foi descontado e não pode ser cancelado.",
   "ERR-ADVANCE-002": "Vale não encontrado.",
   "ERR-SETTINGS-001": "Reserva Legal mínima é 10% e FATES mínimo é 5%.",
+  "ERR-SETTINGS-002": "A alíquota de INSS deve ficar entre 0% e 20%.",
   "ERR-AUTH-001": "Faça login para continuar.",
   "ERR-AUTH-002": "Você não tem permissão para esta ação.",
   "ERR-AUTH-003": "E-mail ou senha incorretos.",

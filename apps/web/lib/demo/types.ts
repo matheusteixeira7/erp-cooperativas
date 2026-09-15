@@ -31,6 +31,8 @@ export type Member = {
   phone: string
   admittedOn: string
   leftOn: string | null
+  /** Contribui INSS pelo sistema (RN-028). false para aposentado, MEI ou quem recolhe por fora. */
+  inssWithheld: boolean
   notes: string
   hasAccess: boolean
 }
@@ -179,8 +181,13 @@ export type PayoutItem = {
   payoutId: string
   memberId: string
   memberNameSnapshot: string
+  /** CPF na data do fechamento, para o relatório de INSS (só sai na exportação). */
+  memberCpfSnapshot: string
   workedDays: number
   grossAmount: number
+  inssBase: number
+  inssRate: number
+  inssAmount: number
   deductionsAmount: number
   netAmount: number
   carryOverDebt: number
@@ -203,6 +210,7 @@ export type Payout = {
   dayValue: number
   distributedTotal: number
   roundingResidual: number
+  inssTotal: number
   totalDeductions: number
   totalNet: number
   settingsSnapshot: PayoutSettingsVersion
@@ -220,6 +228,7 @@ export type PayoutSettingsVersion = {
   legalReserveRate: number
   fatesRate: number
   otherFundsRate: number
+  inssRate: number
   negativeBalancePolicy: NegativeBalancePolicy
   includeMembersLeftInPeriod: boolean
   createdBy: string

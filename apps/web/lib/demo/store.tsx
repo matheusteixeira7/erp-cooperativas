@@ -7,6 +7,7 @@ import * as React from "react"
 
 import { currentPeriod, firstDayOf, lastDayOf, nowIso, periodOf, addMonths } from "@/lib/dates"
 import {
+  INSS_RATE_MAX,
   LEGAL_DEFAULT_SETTINGS,
   itemSubtotal,
   simulatePayout,
@@ -73,6 +74,7 @@ export function toPayoutSettings(version: PayoutSettingsVersion): PayoutSettings
     legalReserveRate: version.legalReserveRate,
     fatesRate: version.fatesRate,
     otherFundsRate: version.otherFundsRate,
+    inssRate: version.inssRate,
     negativeBalancePolicy: version.negativeBalancePolicy,
     includeMembersLeftInPeriod: version.includeMembersLeftInPeriod,
   }
@@ -491,6 +493,7 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
             dayValue: result.dayValue,
             distributedTotal: result.distributedTotal,
             roundingResidual: result.roundingResidual,
+            inssTotal: result.inssTotal,
             totalDeductions: result.totalDeductions,
             totalNet: result.totalNet,
             settingsSnapshot: settings,
@@ -504,8 +507,12 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
               payoutId,
               memberId: item.memberId,
               memberNameSnapshot: item.memberName,
+              memberCpfSnapshot: current.members.find((m) => m.id === item.memberId)?.cpf ?? "",
               workedDays: item.workedDays,
               grossAmount: item.grossAmount,
+              inssBase: item.inssBase,
+              inssRate: item.inssRate,
+              inssAmount: item.inssAmount,
               deductionsAmount: item.deductionsAmount,
               netAmount: item.netAmount,
               carryOverDebt: item.carryOverDebt,
@@ -618,6 +625,7 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
         return run((current) => {
           if (input.legalReserveRate < 0.1 || input.fatesRate < 0.05) throw new DemoError("ERR-SETTINGS-001")
           if (input.legalReserveRate + input.fatesRate + input.otherFundsRate >= 1) throw new DemoError("ERR-VAL-001")
+          if (input.inssRate < 0 || input.inssRate > INSS_RATE_MAX) throw new DemoError("ERR-SETTINGS-002")
           const version: PayoutSettingsVersion = {
             id: newId("ps"),
             ...input,

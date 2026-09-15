@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { CheckCheckIcon, DownloadIcon, FileTextIcon, RotateCcwIcon, SearchXIcon, UnlockIcon } from "lucide-react"
+import { CheckCheckIcon, DownloadIcon, FileTextIcon, LandmarkIcon, RotateCcwIcon, SearchXIcon, UnlockIcon } from "lucide-react"
 
 import { Alert, AlertDescription, AlertTitle } from "@workspace/ui/components/alert"
 import { Badge } from "@workspace/ui/components/badge"
@@ -30,7 +30,7 @@ import { useDetailLabel } from "@/components/shell-context"
 import { errorMessage } from "@/lib/demo/errors"
 import { toPayoutSettings, useDemo } from "@/lib/demo/store"
 import { PAYOUT_STATUS_LABEL } from "@/lib/demo/types"
-import { formatDateTime, formatMoney, formatPercent, formatPeriod } from "@/lib/format"
+import { formatCpf, formatDateTime, formatMoney, formatPercent, formatPeriod } from "@/lib/format"
 import { useActor } from "@/lib/use-actor"
 
 export function PayoutDetailScreen({ id }: { id: string }) {
@@ -108,28 +108,48 @@ export function PayoutDetailScreen({ id }: { id: string }) {
     }
   }
 
-  function exportCsv() {
-    const header = ["Cooperado", "Dias", "Bruto", "Vales", "Liquido", "Saldo devedor", "Pago em"]
-    const lines = payout!.items.map((i) =>
-      [
-        i.memberNameSnapshot,
-        i.workedDays,
-        i.grossAmount.toFixed(2).replace(".", ","),
-        i.deductionsAmount.toFixed(2).replace(".", ","),
-        i.netAmount.toFixed(2).replace(".", ","),
-        i.carryOverDebt.toFixed(2).replace(".", ","),
-        i.paidAt ? formatDateTime(i.paidAt) : "",
-      ].join(";"),
-    )
-    const csv = [header.join(";"), ...lines].join("\n")
+  const money = (value: number) => value.toFixed(2).replace(".", ",")
+
+  function downloadCsv(filename: string, header: string[], lines: string[][]) {
+    const csv = [header.join(";"), ...lines.map((cols) => cols.join(";"))].join("\n")
     const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" })
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement("a")
     anchor.href = url
-    anchor.download = `rateio-${payout!.period}.csv`
+    anchor.download = filename
     anchor.click()
     URL.revokeObjectURL(url)
-    toast.add({ type: "success", title: "CSV exportado", description: `rateio-${payout!.period}.csv` })
+    toast.add({ type: "success", title: "CSV exportado", description: filename })
+  }
+
+  function exportCsv() {
+    downloadCsv(
+      `rateio-${payout!.period}.csv`,
+      ["Cooperado", "Dias", "Bruto", "INSS", "Vales", "Liquido", "Saldo devedor", "Pago em"],
+      payout!.items.map((i) => [
+        i.memberNameSnapshot,
+        String(i.workedDays),
+        money(i.grossAmount),
+        money(i.inssAmount),
+        money(i.deductionsAmount),
+        money(i.netAmount),
+        money(i.carryOverDebt),
+        i.paidAt ? formatDateTime(i.paidAt) : "",
+      ]),
+    )
+  }
+
+  /** Relat\u00F3rio "INSS do m\u00EAs" para o contador gerar a guia. \u00DAnica exporta\u00E7\u00E3o com CPF completo (PL-005). */
+  function exportInssCsv() {
+    const rows = payout!.items.filter((i) => i.workedDays > 0)
+    downloadCsv(
+      `inss-${payout!.period}.csv`,
+      ["Cooperado", "CPF", "Base", "Aliquota", "INSS retido"],
+      [
+        ...rows.map((i) => [i.memberNameSnapshot, formatCpf(i.memberCpfSnapshot), money(i.inssBase), formatPercent(i.inssRate), money(i.inssAmount)]),
+        ["TOTAL", "", money(rows.reduce((s, i) => s + i.inssBase, 0)), "", money(payout!.inssTotal)],
+      ],
+    )
   }
 
   function exportPdf() {
@@ -161,6 +181,10 @@ export function PayoutDetailScreen({ id }: { id: string }) {
               <DropdownMenuItem onClick={exportPdf}>
                 <FileTextIcon />
                 Demonstrativo (PDF)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={exportInssCsv} disabled={payout.inssTotal === 0}>
+                <LandmarkIcon />
+                INSS do mês para o contador (CSV)
               </DropdownMenuItem>
             </DropdownMenuGroup>
           </DropdownMenuContent>
@@ -216,11 +240,14 @@ export function PayoutDetailScreen({ id }: { id: string }) {
         <CardContent>
           <PayoutTable
             totals={payout}
+            showInss={settings.inssRate > 0 || payout.inssTotal > 0}
             rows={payout.items.map((item) => ({
               key: item.id,
               memberName: item.memberNameSnapshot,
               workedDays: item.workedDays,
               grossAmount: item.grossAmount,
+              inssRate: item.inssRate,
+              inssAmount: item.inssAmount,
               deductionsAmount: item.deductionsAmount,
               netAmount: item.netAmount,
               carryOverDebt: item.carryOverDebt,
@@ -261,6 +288,8 @@ export function PayoutDetailScreen({ id }: { id: string }) {
               <dd className="text-right tabular-nums">{formatPercent(settings.fatesRate)}</dd>
               <dt className="text-muted-foreground">Outros fundos</dt>
               <dd className="text-right tabular-nums">{formatPercent(settings.otherFundsRate)}</dd>
+              <dt className="text-muted-foreground">INSS do cooperado</dt>
+              <dd className="text-right tabular-nums">{settings.inssRate > 0 ? `${formatPercent(settings.inssRate)} sobre o bruto` : "Sem desconto"}</dd>
               <dt className="text-muted-foreground">Vale maior que o bruto</dt>
               <dd className="text-right">{settings.negativeBalancePolicy === "carry_over" ? "Passa para o próximo mês" : "Perdoado"}</dd>
               <dt className="text-muted-foreground">Desligados no mês</dt>

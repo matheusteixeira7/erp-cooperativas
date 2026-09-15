@@ -1,4 +1,4 @@
-// Pure payout calculation (RN-001..RN-012, RN-020). No I/O. Money handled in integer cents.
+// Pure payout calculation (RN-001..RN-012, RN-020, RN-028). No I/O. Money handled in integer cents.
 
 import { isInPeriod, lastDayOf } from "@/lib/dates"
 
@@ -8,14 +8,19 @@ export type PayoutSettings = {
   legalReserveRate: number
   fatesRate: number
   otherFundsRate: number
+  /** INSS retido do bruto de cada cooperado antes dos vales (RN-028). 0 desliga. */
+  inssRate: number
   negativeBalancePolicy: NegativeBalancePolicy
   includeMembersLeftInPeriod: boolean
 }
+
+export const INSS_RATE_MAX = 0.2
 
 export const LEGAL_DEFAULT_SETTINGS: PayoutSettings = {
   legalReserveRate: 0.1,
   fatesRate: 0.05,
   otherFundsRate: 0,
+  inssRate: 0.075,
   negativeBalancePolicy: "carry_over",
   includeMembersLeftInPeriod: true,
 }
@@ -27,7 +32,8 @@ export type PayoutInput = {
   purchases?: { purchasedOn: string; totalAmount: number; deletedAt?: string | null }[]
   expenses: { incurredOn: string; amount: number; deletedAt?: string | null }[]
   attendances: { memberId: string; date: string; present: boolean }[]
-  members: { id: string; name: string; admittedOn: string; leftOn?: string | null }[]
+  /** inssWithheld omitido = true (RN-028). */
+  members: { id: string; name: string; admittedOn: string; leftOn?: string | null; inssWithheld?: boolean }[]
   advances: { id: string; memberId: string; amount: number; grantedOn: string; status: string }[]
   settings: PayoutSettings
 }
@@ -37,6 +43,11 @@ export type PayoutItemResult = {
   memberName: string
   workedDays: number
   grossAmount: number
+  /** Base do INSS = bruto (antes dos vales). */
+  inssBase: number
+  /** Alíquota aplicada; 0 quando o cooperado não contribui pelo sistema. */
+  inssRate: number
+  inssAmount: number
   deductionsAmount: number
   netAmount: number
   carryOverDebt: number
@@ -57,6 +68,8 @@ export type PayoutResult = {
   dayValue: number
   distributedTotal: number
   roundingResidual: number
+  /** Σ items.inssAmount. Fica com a cooperativa para recolher via guia (RN-028). */
+  inssTotal: number
   totalDeductions: number
   totalNet: number
   items: PayoutItemResult[]
@@ -182,22 +195,36 @@ export function simulatePayout(input: PayoutInput): SimulationOutcome {
     (a) => a.status === "pending" && a.grantedOn <= periodEnd,
   )
 
+  const exemptFromInss = settings.inssRate > 0 ? eligibleMembers.filter((m) => m.inssWithheld === false) : []
+  if (exemptFromInss.length > 0) {
+    warnings.push(
+      `${exemptFromInss.length} cooperado(s) sem desconto de INSS pelo sistema: ${exemptFromInss.map((m) => m.name).join(", ")}.`,
+    )
+  }
+
   const items: PayoutItemResult[] = eligibleMembers
     .map((member) => {
       const workedDays = workedDaysByMember.get(member.id) ?? 0
       const grossCents = workedDays * dayValueCents
+      // RN-028: INSS on the gross, before advances. Exempt members get zero.
+      const withheld = member.inssWithheld !== false
+      const inssRate = withheld ? settings.inssRate : 0
+      const inssCents = withheld ? roundHalfEven(grossCents * settings.inssRate) : 0
+      const afterInssCents = grossCents - inssCents
       const memberAdvances = pendingAdvances.filter((a) => a.memberId === member.id)
       const deductionsCents = memberAdvances.reduce((sum, a) => sum + toCents(a.amount), 0)
-      const netCents = Math.max(0, grossCents - deductionsCents)
+      // RN-002 / RN-009: net and carry-over computed on gross − INSS.
+      const netCents = Math.max(0, afterInssCents - deductionsCents)
       const debtCents =
         settings.negativeBalancePolicy === "carry_over"
-          ? Math.max(0, deductionsCents - grossCents)
+          ? Math.max(0, deductionsCents - afterInssCents)
           : 0
-      if (deductionsCents > grossCents) {
+      if (deductionsCents > afterInssCents) {
+        const baseLabel = inssCents > 0 ? "bruto menos INSS" : "bruto"
         warnings.push(
           settings.negativeBalancePolicy === "carry_over"
-            ? `${member.name}: vales (${fromCents(deductionsCents).toFixed(2)}) maiores que o bruto. Saldo devedor passa para o mês seguinte.`
-            : `${member.name}: vales maiores que o bruto. A diferença será perdoada (política da cooperativa).`,
+            ? `${member.name}: vales (${fromCents(deductionsCents).toFixed(2)}) maiores que o ${baseLabel}. Saldo devedor passa para o mês seguinte.`
+            : `${member.name}: vales maiores que o ${baseLabel}. A diferença será perdoada (política da cooperativa).`,
         )
       }
       return {
@@ -205,6 +232,9 @@ export function simulatePayout(input: PayoutInput): SimulationOutcome {
         memberName: member.name,
         workedDays,
         grossAmount: fromCents(grossCents),
+        inssBase: fromCents(grossCents),
+        inssRate,
+        inssAmount: fromCents(inssCents),
         deductionsAmount: fromCents(deductionsCents),
         netAmount: fromCents(netCents),
         carryOverDebt: fromCents(debtCents),
@@ -214,6 +244,7 @@ export function simulatePayout(input: PayoutInput): SimulationOutcome {
     .sort((a, b) => a.memberName.localeCompare(b.memberName, "pt-BR"))
 
   const distributedCents = items.reduce((sum, i) => sum + toCents(i.grossAmount), 0)
+  const inssTotalCents = items.reduce((sum, i) => sum + toCents(i.inssAmount), 0)
   const totalDeductionsCents = items.reduce((sum, i) => sum + toCents(i.deductionsAmount), 0)
   const totalNetCents = items.reduce((sum, i) => sum + toCents(i.netAmount), 0)
 
@@ -233,6 +264,7 @@ export function simulatePayout(input: PayoutInput): SimulationOutcome {
       dayValue: fromCents(dayValueCents),
       distributedTotal: fromCents(distributedCents),
       roundingResidual: fromCents(distributableCents - distributedCents),
+      inssTotal: fromCents(inssTotalCents),
       totalDeductions: fromCents(totalDeductionsCents),
       totalNet: fromCents(totalNetCents),
       items,

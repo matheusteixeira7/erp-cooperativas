@@ -22,7 +22,7 @@ import { errorMessage } from "@/lib/demo/errors"
 import { closedPayoutFor, settingsForPeriod, toPayoutSettings, useDemo } from "@/lib/demo/store"
 import type { Payout } from "@/lib/demo/types"
 import type { SimulationOutcome } from "@/lib/domain/payout"
-import { formatMoney, formatPeriod } from "@/lib/format"
+import { formatMoney, formatPercent, formatPeriod } from "@/lib/format"
 import { useActor } from "@/lib/use-actor"
 
 export function PayoutScreen() {
@@ -184,17 +184,22 @@ export function PayoutScreen() {
               <CardDescription>
                 {closed
                   ? "O demonstrativo oficial está no fechamento gravado. Estes números só mudam se o mês for reaberto."
-                  : "Bruto = dias × diária. Vales pendentes até o fim do mês são descontados. Líquido nunca fica negativo."}
+                  : settings.inssRate > 0
+                    ? `Bruto = dias × diária. INSS de ${formatPercent(settings.inssRate)} sai do bruto, depois os vales pendentes. Líquido nunca fica negativo.`
+                    : "Bruto = dias × diária. Vales pendentes até o fim do mês são descontados. Líquido nunca fica negativo."}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <PayoutTable
                 totals={simulated}
+                showInss={settings.inssRate > 0 || simulated.inssTotal > 0}
                 rows={simulated.items.map((item) => ({
                   key: item.memberId,
                   memberName: item.memberName,
                   workedDays: item.workedDays,
                   grossAmount: item.grossAmount,
+                  inssRate: item.inssRate,
+                  inssAmount: item.inssAmount,
                   deductionsAmount: item.deductionsAmount,
                   netAmount: item.netAmount,
                   carryOverDebt: item.carryOverDebt,
@@ -208,8 +213,8 @@ export function PayoutScreen() {
               <div className="text-sm">
                 <p className="font-medium">Pronto para oficializar {formatPeriod(period)}?</p>
                 <p className="text-muted-foreground">
-                  Percentuais vigentes: Reserva Legal {Math.round(settings.legalReserveRate * 100)}%, FATES {Math.round(settings.fatesRate * 100)}%
-                  {settingsVersion.isLegalDefault ? " (mínimos legais)" : ""}. Depois de fechar, o mês fica bloqueado.
+                  Percentuais vigentes: Reserva Legal {formatPercent(settings.legalReserveRate)}, FATES {formatPercent(settings.fatesRate)}
+                  {settingsVersion.isLegalDefault ? " (mínimos legais)" : ""}, INSS {formatPercent(settings.inssRate)}. Depois de fechar, o mês fica bloqueado.
                 </p>
               </div>
               <Button size="lg" onClick={() => setConfirmOpen(true)}>
@@ -230,7 +235,7 @@ export function PayoutScreen() {
         title={`Fechar ${formatPeriod(period)}?`}
         description={
           simulated
-            ? `${formatMoney(simulated.distributedTotal)} serão rateados entre ${simulated.items.filter((i) => i.workedDays > 0).length} cooperados com diária de ${formatMoney(simulated.dayValue)}. Vales pendentes (${formatMoney(simulated.totalDeductions)}) serão descontados. Esta ação bloqueia chamada, vendas, despesas e vales do mês.`
+            ? `${formatMoney(simulated.distributedTotal)} serão rateados entre ${simulated.items.filter((i) => i.workedDays > 0).length} cooperados com diária de ${formatMoney(simulated.dayValue)}.${simulated.inssTotal > 0 ? ` ${formatMoney(simulated.inssTotal)} de INSS serão retidos para a cooperativa recolher.` : ""} Vales pendentes (${formatMoney(simulated.totalDeductions)}) serão descontados. Esta ação bloqueia chamada, vendas, compras, despesas e vales do mês.`
             : ""
         }
         confirmLabel="Fechar mês"

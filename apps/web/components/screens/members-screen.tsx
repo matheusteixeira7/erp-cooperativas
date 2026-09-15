@@ -42,13 +42,14 @@ type MemberForm = {
   pixKey: string
   phone: string
   admittedOn: string
+  inssWithheld: boolean
   notes: string
   hasAccess: boolean
 }
 
 type FormErrors = Partial<Record<keyof MemberForm, string>>
 
-const EMPTY_FORM: MemberForm = { name: "", cpf: "", pixKey: "", phone: "", admittedOn: todayIso(), notes: "", hasAccess: false }
+const EMPTY_FORM: MemberForm = { name: "", cpf: "", pixKey: "", phone: "", admittedOn: todayIso(), inssWithheld: true, notes: "", hasAccess: false }
 
 export function MembersScreen() {
   const { data, actions, resetCount } = useDemo()
@@ -91,6 +92,7 @@ export function MembersScreen() {
       pixKey: member.pixKey,
       phone: formatPhone(member.phone),
       admittedOn: member.admittedOn,
+      inssWithheld: member.inssWithheld,
       notes: member.notes,
       hasAccess: member.hasAccess,
     })
@@ -120,6 +122,7 @@ export function MembersScreen() {
       pixKey: form.pixKey.trim(),
       phone: onlyDigits(form.phone),
       admittedOn: form.admittedOn,
+      inssWithheld: form.inssWithheld,
       notes: form.notes.trim(),
       hasAccess: form.hasAccess,
     }
@@ -245,7 +248,10 @@ export function MembersScreen() {
                     <TableRow key={member.id}>
                       <TableCell className="font-medium">
                         <span className="flex flex-col">
-                          <span>{member.name}</span>
+                          <span className="flex flex-wrap items-center gap-1.5">
+                            {member.name}
+                            {!member.inssWithheld && <Badge variant="outline">sem INSS</Badge>}
+                          </span>
                           {member.hasAccess && <span className="text-xs text-muted-foreground">Tem acesso ao extrato</span>}
                         </span>
                       </TableCell>
@@ -345,6 +351,13 @@ export function MembersScreen() {
                 <Field>
                   <FieldLabel htmlFor="member-notes">Observações</FieldLabel>
                   <Textarea id="member-notes" rows={3} value={form.notes} onChange={(e) => setField("notes", e.target.value)} placeholder="Opcional" />
+                </Field>
+                <Field orientation="horizontal">
+                  <FieldContent>
+                    <FieldTitle>Contribui INSS pelo sistema</FieldTitle>
+                    <FieldDescription>Desligue para aposentado, MEI ou quem recolhe por fora. Vale a partir do próximo fechamento.</FieldDescription>
+                  </FieldContent>
+                  <Switch checked={form.inssWithheld} onCheckedChange={(checked) => setField("inssWithheld", checked)} aria-label="Contribui INSS pelo sistema" />
                 </Field>
                 <Field orientation="horizontal">
                   <FieldContent>
