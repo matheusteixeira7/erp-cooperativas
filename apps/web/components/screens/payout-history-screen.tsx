@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { useQuery } from "@tanstack/react-query"
 import { ChevronRightIcon, HistoryIcon } from "lucide-react"
 
 import { Badge } from "@workspace/ui/components/badge"
@@ -11,16 +12,17 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@workspace/ui/components/table"
 
 import { PageHeader } from "@/components/page-header"
+import { QueryError } from "@/components/query-error"
 import { TableSkeleton } from "@/components/table-skeleton"
-import { useDemo, useSimulatedLoading } from "@/lib/demo/store"
-import { PAYOUT_STATUS_LABEL } from "@/lib/demo/types"
+import { PAYOUT_STATUS_LABEL } from "@/lib/domain/enums"
 import { formatDateTime, formatMoney, formatPeriod } from "@/lib/format"
+import { useTRPC } from "@/lib/trpc/client"
 
 export function PayoutHistoryScreen() {
-  const { data, resetCount } = useDemo()
+  const trpc = useTRPC()
   const router = useRouter()
-  const loading = useSimulatedLoading(`history-${resetCount}`)
-  const payouts = [...data.payouts].sort((a, b) => b.period.localeCompare(a.period) || b.closedAt.localeCompare(a.closedAt))
+  const query = useQuery(trpc.payouts.list.queryOptions({ limit: 24 }))
+  const payouts = query.data?.items ?? []
 
   return (
     <div className="flex flex-col gap-6">
@@ -32,8 +34,10 @@ export function PayoutHistoryScreen() {
 
       <Card>
         <CardContent>
-          {loading ? (
+          {query.isPending ? (
             <TableSkeleton rows={3} columns={6} />
+          ) : query.isError ? (
+            <QueryError error={query.error} onRetry={() => void query.refetch()} retrying={query.isFetching} className="border-0" />
           ) : payouts.length === 0 ? (
             <Empty>
               <EmptyHeader>

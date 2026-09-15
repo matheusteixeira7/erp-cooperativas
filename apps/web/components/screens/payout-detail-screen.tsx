@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { CheckCheckIcon, DownloadIcon, FileTextIcon, LandmarkIcon, RotateCcwIcon, SearchXIcon, UnlockIcon } from "lucide-react"
 
 import { Alert, AlertDescription, AlertTitle } from "@workspace/ui/components/alert"
@@ -19,6 +20,7 @@ import {
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@workspace/ui/components/empty"
 import { Field, FieldDescription, FieldError, FieldLabel } from "@workspace/ui/components/field"
 import { Progress, ProgressLabel } from "@workspace/ui/components/progress"
+import { Skeleton } from "@workspace/ui/components/skeleton"
 import { TableCell, TableHead } from "@workspace/ui/components/table"
 import { Textarea } from "@workspace/ui/components/textarea"
 import { toast } from "@workspace/ui/components/toast"
@@ -26,25 +28,35 @@ import { toast } from "@workspace/ui/components/toast"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { PageHeader } from "@/components/page-header"
 import { PayoutSummaryCards, PayoutTable } from "@/components/payout-summary"
+import { QueryError } from "@/components/query-error"
 import { useDetailLabel } from "@/components/shell-context"
-import { errorMessage } from "@/lib/demo/errors"
-import { toPayoutSettings, useDemo } from "@/lib/demo/store"
-import { PAYOUT_STATUS_LABEL } from "@/lib/demo/types"
-import { formatCpf, formatDateTime, formatMoney, formatPercent, formatPeriod } from "@/lib/format"
-import { useActor } from "@/lib/use-actor"
+import { PAYOUT_STATUS_LABEL } from "@/lib/domain/enums"
+import type { PayoutSettings } from "@/lib/domain/payout"
+import { downloadBase64File } from "@/lib/download"
+import { formatDateTime, formatMoney, formatPercent, formatPeriod } from "@/lib/format"
+import { useTRPC, useTRPCClient } from "@/lib/trpc/client"
+import { domainCodeOf, errorMessage } from "@/lib/trpc/errors"
+import { useInvalidateAll } from "@/lib/trpc/hooks"
 
 export function PayoutDetailScreen({ id }: { id: string }) {
-  const { data, actions } = useDemo()
-  const actor = useActor()
-  const payout = data.payouts.find((p) => p.id === id)
+  const trpc = useTRPC()
+  const client = useTRPCClient()
+  const invalidateAll = useInvalidateAll()
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+  const query = useQuery(trpc.payouts.byId.queryOptions({ id }, { enabled: isUuid, retry: false }))
+  const payout = query.data ?? null
   useDetailLabel(payout ? formatPeriod(payout.period) : undefined)
+
+  const markPaid = useMutation(trpc.payouts.markPaid.mutationOptions())
+  const markAllPaid = useMutation(trpc.payouts.markAllPaid.mutationOptions())
+  const reopen = useMutation(trpc.payouts.reopen.mutationOptions())
 
   const [reopenOpen, setReopenOpen] = React.useState(false)
   const [reason, setReason] = React.useState("")
   const [busyItem, setBusyItem] = React.useState<string | null>(null)
-  const [busyAll, setBusyAll] = React.useState(false)
+  const [exporting, setExporting] = React.useState<string | null>(null)
 
-  if (!payout) {
+  if (!isUuid || (query.isError && domainCodeOf(query.error) === "PAYOUT_NOT_FOUND")) {
     return (
       <Empty className="flex-1">
         <EmptyHeader>
@@ -52,7 +64,7 @@ export function PayoutDetailScreen({ id }: { id: string }) {
             <SearchXIcon />
           </EmptyMedia>
           <EmptyTitle>Fechamento não encontrado</EmptyTitle>
-          <EmptyDescription>O link pode estar errado ou os dados de demonstração foram redefinidos.</EmptyDescription>
+          <EmptyDescription>O link pode estar errado ou o fechamento pertence a outra cooperativa.</EmptyDescription>
         </EmptyHeader>
         <EmptyContent>
           <Button render={<Link href="/fechamento/historico" />} nativeButton={false}>
@@ -63,17 +75,43 @@ export function PayoutDetailScreen({ id }: { id: string }) {
     )
   }
 
-  const settings = toPayoutSettings(payout.settingsSnapshot)
+  if (query.isError) {
+    return <QueryError error={query.error} onRetry={() => void query.refetch()} retrying={query.isFetching} title="Não foi possível carregar o fechamento" className="flex-1 border" />
+  }
+
+  if (!payout) {
+    return (
+      <div className="flex flex-col gap-6" aria-busy="true">
+        <Skeleton className="h-9 w-64" />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-28 w-full" />
+          ))}
+        </div>
+        <Skeleton className="h-64 w-full" />
+      </div>
+    )
+  }
+
+  const settings: PayoutSettings = {
+    legalReserveRate: payout.settingsSnapshot.legalReserveRate,
+    fatesRate: payout.settingsSnapshot.fatesRate,
+    otherFundsRate: payout.settingsSnapshot.otherFundsRate,
+    inssRate: payout.settingsSnapshot.inssRate,
+    negativeBalancePolicy: payout.settingsSnapshot.negativeBalancePolicy,
+    includeMembersLeftInPeriod: payout.settingsSnapshot.includeMembersLeftInPeriod,
+  }
   const isClosed = payout.status === "closed"
   const payable = payout.items.filter((i) => i.netAmount > 0)
   const paidCount = payable.filter((i) => i.paidAt).length
   const paidPercent = payable.length ? Math.round((paidCount / payable.length) * 100) : 0
-  const deductedAdvances = data.advances.filter((a) => a.deductedInPayoutId === payout.id)
+  const deductedAdvances = payout.deductedAdvances
 
-  async function togglePaid(itemId: string, paid: boolean) {
+  async function togglePaid(memberId: string, itemId: string, paid: boolean) {
     setBusyItem(itemId)
     try {
-      await actions.setItemPaid(payout!.id, itemId, paid)
+      await markPaid.mutateAsync({ payoutId: id, memberIds: [memberId], paid })
+      await invalidateAll()
     } catch (error) {
       toast.add({ type: "error", title: "Não foi possível atualizar", description: errorMessage(error) })
     } finally {
@@ -82,20 +120,19 @@ export function PayoutDetailScreen({ id }: { id: string }) {
   }
 
   async function markAll() {
-    setBusyAll(true)
     try {
-      await actions.setAllPaid(payout!.id)
+      await markAllPaid.mutateAsync({ payoutId: id })
+      await invalidateAll()
       toast.add({ type: "success", title: "Todos marcados como pagos" })
     } catch (error) {
       toast.add({ type: "error", title: "Não foi possível atualizar", description: errorMessage(error) })
-    } finally {
-      setBusyAll(false)
     }
   }
 
   async function handleReopen() {
     try {
-      await actions.reopenPayout(payout!.id, reason, actor)
+      await reopen.mutateAsync({ id, reason })
+      await invalidateAll()
       toast.add({
         type: "success",
         title: `${formatPeriod(payout!.period)} reaberto`,
@@ -108,59 +145,19 @@ export function PayoutDetailScreen({ id }: { id: string }) {
     }
   }
 
-  const money = (value: number) => value.toFixed(2).replace(".", ",")
-
-  function downloadCsv(filename: string, header: string[], lines: string[][]) {
-    const csv = [header.join(";"), ...lines.map((cols) => cols.join(";"))].join("\n")
-    const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" })
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement("a")
-    anchor.href = url
-    anchor.download = filename
-    anchor.click()
-    URL.revokeObjectURL(url)
-    toast.add({ type: "success", title: "CSV exportado", description: filename })
-  }
-
-  function exportCsv() {
-    downloadCsv(
-      `rateio-${payout!.period}.csv`,
-      ["Cooperado", "Dias", "Bruto", "INSS", "Vales", "Liquido", "Saldo devedor", "Pago em"],
-      payout!.items.map((i) => [
-        i.memberNameSnapshot,
-        String(i.workedDays),
-        money(i.grossAmount),
-        money(i.inssAmount),
-        money(i.deductionsAmount),
-        money(i.netAmount),
-        money(i.carryOverDebt),
-        i.paidAt ? formatDateTime(i.paidAt) : "",
-      ]),
-    )
-  }
-
-  /** Relat\u00F3rio "INSS do m\u00EAs" para o contador gerar a guia. \u00DAnica exporta\u00E7\u00E3o com CPF completo (PL-005). */
-  function exportInssCsv() {
-    const rows = payout!.items.filter((i) => i.workedDays > 0)
-    downloadCsv(
-      `inss-${payout!.period}.csv`,
-      ["Cooperado", "CPF", "Base", "Aliquota", "INSS retido"],
-      [
-        ...rows.map((i) => [i.memberNameSnapshot, formatCpf(i.memberCpfSnapshot), money(i.inssBase), formatPercent(i.inssRate), money(i.inssAmount)]),
-        ["TOTAL", "", money(rows.reduce((s, i) => s + i.inssBase, 0)), "", money(payout!.inssTotal)],
-      ],
-    )
-  }
-
-  function exportPdf() {
-    const toastId = toast.add({ type: "loading", title: "Gerando PDF do demonstrativo…" })
-    setTimeout(() => {
-      toast.update(toastId, {
-        type: "info",
-        title: "PDF simulado",
-        description: "No produto final, o demonstrativo abre aqui pronto para enviar ao contador.",
-      })
-    }, 1200)
+  async function exportFile(format: "csv" | "pdf", report: "payout" | "inss") {
+    const key = `${report}-${format}`
+    setExporting(key)
+    const toastId = toast.add({ type: "loading", title: report === "inss" ? "Gerando relatório de INSS…" : format === "pdf" ? "Gerando PDF do demonstrativo…" : "Gerando planilha…" })
+    try {
+      const file = await client.payouts.export.query({ id, format, report })
+      downloadBase64File(file)
+      toast.update(toastId, { type: "success", title: "Arquivo gerado", description: file.filename })
+    } catch (error) {
+      toast.update(toastId, { type: "error", title: "Não foi possível exportar", description: errorMessage(error) })
+    } finally {
+      setExporting(null)
+    }
   }
 
   return (
@@ -168,23 +165,27 @@ export function PayoutDetailScreen({ id }: { id: string }) {
       <PageHeader title={`Fechamento de ${formatPeriod(payout.period)}`} description={`Fechado em ${formatDateTime(payout.closedAt)} por ${payout.closedBy}.`}>
         <Badge variant={isClosed ? "default" : "outline"}>{PAYOUT_STATUS_LABEL[payout.status]}</Badge>
         <DropdownMenu>
-          <DropdownMenuTrigger render={<Button variant="outline" />}>
+          <DropdownMenuTrigger render={<Button variant="outline" disabled={exporting !== null} />}>
             <DownloadIcon data-icon="inline-start" />
             Exportar
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuGroup>
-              <DropdownMenuItem onClick={exportCsv}>
+              <DropdownMenuItem onClick={() => void exportFile("csv", "payout")}>
                 <FileTextIcon />
                 Planilha (CSV)
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={exportPdf}>
+              <DropdownMenuItem onClick={() => void exportFile("pdf", "payout")}>
                 <FileTextIcon />
                 Demonstrativo (PDF)
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={exportInssCsv} disabled={payout.inssTotal === 0}>
+              <DropdownMenuItem onClick={() => void exportFile("csv", "inss")} disabled={payout.inssTotal === 0}>
                 <LandmarkIcon />
                 INSS do mês para o contador (CSV)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void exportFile("pdf", "inss")} disabled={payout.inssTotal === 0}>
+                <LandmarkIcon />
+                INSS do mês para o contador (PDF)
               </DropdownMenuItem>
             </DropdownMenuGroup>
           </DropdownMenuContent>
@@ -230,7 +231,7 @@ export function PayoutDetailScreen({ id }: { id: string }) {
                   {paidCount} de {payable.length} pagos
                 </ProgressLabel>
               </Progress>
-              <Button variant="outline" size="sm" onClick={markAll} disabled={busyAll || paidCount === payable.length}>
+              <Button variant="outline" size="sm" onClick={markAll} disabled={markAllPaid.isPending || paidCount === payable.length}>
                 <CheckCheckIcon data-icon="inline-start" />
                 Marcar todos como pagos
               </Button>
@@ -261,8 +262,8 @@ export function PayoutDetailScreen({ id }: { id: string }) {
                     <Checkbox
                       aria-label={`Marcar ${item.memberNameSnapshot} como pago`}
                       checked={Boolean(item.paidAt)}
-                      disabled={!isClosed || busyItem === item.id || busyAll}
-                      onCheckedChange={(checked) => void togglePaid(item.id, checked)}
+                      disabled={!isClosed || busyItem === item.id || markAllPaid.isPending}
+                      onCheckedChange={(checked) => void togglePaid(item.memberId, item.id, checked)}
                     />
                   ) : (
                     <span className="text-muted-foreground">—</span>
@@ -304,13 +305,13 @@ export function PayoutDetailScreen({ id }: { id: string }) {
           </CardHeader>
           <CardContent>
             {deductedAdvances.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nenhum vale foi descontado.</p>
+              <p className="text-sm text-muted-foreground">{isClosed ? "Nenhum vale foi descontado." : "Os vales voltaram a pendentes quando o mês foi reaberto."}</p>
             ) : (
               <ul className="flex flex-col gap-2 text-sm">
                 {deductedAdvances.map((advance) => (
                   <li key={advance.id} className="flex items-center justify-between gap-2">
                     <span className="truncate">
-                      {data.members.find((m) => m.id === advance.memberId)?.name ?? "—"} · {advance.description}
+                      {advance.memberName} · {advance.description}
                     </span>
                     <span className="tabular-nums">{formatMoney(advance.amount)}</span>
                   </li>

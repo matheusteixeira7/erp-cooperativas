@@ -10,9 +10,12 @@ function handler(request: Request) {
     endpoint,
     req: request,
     router: appRouter,
-    createContext: () => createTRPCContext({ headers: request.headers }),
+    createContext: ({ resHeaders }) => createTRPCContext({ headers: request.headers, resHeaders }),
     onError({ error, path }) {
-      console.error(`tRPC failed on ${path ?? "<unknown>"}:`, error)
+      // Expected business errors (409, 422, 404...) are not server failures.
+      if (error.code === "INTERNAL_SERVER_ERROR") {
+        console.error(`tRPC failed on ${path ?? "<unknown>"}:`, error)
+      }
     },
   })
 }

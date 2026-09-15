@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { ExternalLinkIcon, InfoIcon, ScaleIcon } from "lucide-react"
 
 import { Alert, AlertDescription, AlertTitle } from "@workspace/ui/components/alert"
@@ -11,24 +12,57 @@ import { Field, FieldContent, FieldDescription, FieldError, FieldGroup, FieldLab
 import { Input } from "@workspace/ui/components/input"
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from "@workspace/ui/components/input-group"
 import { RadioGroup, RadioGroupItem } from "@workspace/ui/components/radio-group"
+import { Skeleton } from "@workspace/ui/components/skeleton"
 import { Spinner } from "@workspace/ui/components/spinner"
 import { Switch } from "@workspace/ui/components/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@workspace/ui/components/table"
 import { toast } from "@workspace/ui/components/toast"
 
 import { PageHeader } from "@/components/page-header"
+import { QueryError } from "@/components/query-error"
 import { addMonths, currentPeriod } from "@/lib/dates"
-import { errorMessage } from "@/lib/demo/errors"
-import { settingsForPeriod, useDemo } from "@/lib/demo/store"
-import { INSS_RATE_MAX, type NegativeBalancePolicy } from "@/lib/domain/payout"
+import type { NegativeBalancePolicy } from "@/lib/domain/enums"
+import { INSS_RATE_MAX } from "@/lib/domain/payout"
 import { formatDateTime, formatPercent, formatPeriod, parseDecimal } from "@/lib/format"
-import { useActor } from "@/lib/use-actor"
+import { useTRPC, type RouterOutputs } from "@/lib/trpc/client"
+import { errorMessage } from "@/lib/trpc/errors"
+import { useInvalidateAll } from "@/lib/trpc/hooks"
+
+type SettingsData = RouterOutputs["payoutSettings"]["get"]
+type SettingsVersion = SettingsData["current"]
 
 export function PayoutSettingsScreen() {
-  const { data, actions } = useDemo()
-  const actor = useActor()
+  const trpc = useTRPC()
   const current = currentPeriod()
-  const active = settingsForPeriod(data.settingsHistory, current)
+  const query = useQuery(trpc.payoutSettings.get.queryOptions({ period: current }))
+
+  return (
+    <div className="flex flex-col gap-6">
+      <PageHeader title="Parâmetros de rateio" description="Percentuais dos fundos legais, INSS do cooperado e regras aplicadas em cada fechamento. Cada alteração vira uma nova versão." />
+
+      {query.isPending ? (
+        <div className="grid gap-6 lg:grid-cols-5" aria-busy="true">
+          <Skeleton className="h-[520px] lg:col-span-3" />
+          <div className="flex flex-col gap-4 lg:col-span-2">
+            <Skeleton className="h-28" />
+            <Skeleton className="h-28" />
+            <Skeleton className="h-28" />
+          </div>
+        </div>
+      ) : query.isError ? (
+        <QueryError error={query.error} onRetry={() => void query.refetch()} retrying={query.isFetching} title="Não foi possível carregar os parâmetros" />
+      ) : (
+        <SettingsContent key={query.data.current.id ?? "default"} data={query.data} current={current} />
+      )}
+    </div>
+  )
+}
+
+function SettingsContent({ data, current }: { data: SettingsData; current: string }) {
+  const trpc = useTRPC()
+  const invalidateAll = useInvalidateAll()
+  const active = data.current
+  const update = useMutation(trpc.payoutSettings.update.mutationOptions())
 
   const [legalReserve, setLegalReserve] = React.useState(String(active.legalReserveRate * 100))
   const [fates, setFates] = React.useState(String(active.fatesRate * 100))
@@ -38,14 +72,16 @@ export function PayoutSettingsScreen() {
   const [includeLeft, setIncludeLeft] = React.useState(active.includeMembersLeftInPeriod)
   const [effectiveFrom, setEffectiveFrom] = React.useState(current)
   const [errors, setErrors] = React.useState<{ legalReserve?: string; fates?: string; other?: string; inss?: string; effectiveFrom?: string }>({})
-  const [saving, setSaving] = React.useState(false)
+  const saving = update.isPending
 
   const lr = parseDecimal(legalReserve)
   const ft = parseDecimal(fates)
   const ot = parseDecimal(other)
   const ir = parseDecimal(inss)
   const sum = (lr ?? 0) + (ft ?? 0) + (ot ?? 0)
-  const closedForPeriod = data.payouts.some((p) => p.period === effectiveFrom && p.status === "closed")
+
+  const periodStatus = useQuery(trpc.payouts.periodStatus.queryOptions({ period: effectiveFrom }, { enabled: /^\d{4}-\d{2}$/.test(effectiveFrom) }))
+  const closedForPeriod = periodStatus.data?.closed ?? false
 
   function validate() {
     const next: typeof errors = {}
@@ -56,6 +92,7 @@ export function PayoutSettingsScreen() {
     if (ir === null || ir < 0 || ir > INSS_RATE_MAX * 100) next.inss = `Entre 0% e ${INSS_RATE_MAX * 100}%. Zero desliga o desconto.`
     if (!/^\d{4}-\d{2}$/.test(effectiveFrom)) next.effectiveFrom = "Informe o mês."
     else if (effectiveFrom < addMonths(current, -12)) next.effectiveFrom = "Escolha um mês recente."
+    else if (closedForPeriod) next.effectiveFrom = "Este mês já está fechado. Escolha um mês aberto."
     setErrors(next)
     return Object.keys(next).length === 0
   }
@@ -63,9 +100,8 @@ export function PayoutSettingsScreen() {
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
     if (!validate() || lr === null || ft === null || ot === null || ir === null) return
-    setSaving(true)
     try {
-      const version = await actions.saveSettings({
+      const version = await update.mutateAsync({
         effectiveFrom,
         legalReserveRate: lr / 100,
         fatesRate: ft / 100,
@@ -73,8 +109,8 @@ export function PayoutSettingsScreen() {
         inssRate: ir / 100,
         negativeBalancePolicy: policy,
         includeMembersLeftInPeriod: includeLeft,
-        createdBy: actor.name,
       })
+      await invalidateAll()
       toast.add({
         type: "success",
         title: "Parâmetros salvos",
@@ -82,23 +118,20 @@ export function PayoutSettingsScreen() {
       })
     } catch (error) {
       toast.add({ type: "error", title: "Não foi possível salvar", description: errorMessage(error) })
-    } finally {
-      setSaving(false)
     }
   }
 
-  const history = [...data.settingsHistory].sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom) || b.createdAt.localeCompare(a.createdAt))
+  const history: SettingsVersion[] = data.history
 
   return (
-    <div className="flex flex-col gap-6">
-      <PageHeader title="Parâmetros de rateio" description="Percentuais dos fundos legais, INSS do cooperado e regras aplicadas em cada fechamento. Cada alteração vira uma nova versão." />
-
+    <>
       {active.isLegalDefault && (
         <Alert>
           <ScaleIcon />
           <AlertTitle>Usando os mínimos legais</AlertTitle>
           <AlertDescription>
             Reserva Legal 10% e FATES 5%, conforme a Lei 5.764/1971. O estatuto da cooperativa pode definir percentuais maiores.
+            {data.isDefault && " Nenhuma versão foi gravada ainda: estes são os padrões do sistema."}
           </AlertDescription>
         </Alert>
       )}
@@ -121,7 +154,19 @@ export function PayoutSettingsScreen() {
                     <Field data-invalid={errors.legalReserve ? true : undefined}>
                       <FieldLabel htmlFor="rate-legal">Reserva Legal</FieldLabel>
                       <InputGroup>
-                        <InputGroupInput id="rate-legal" type="number" inputMode="decimal" min={10} step="0.5" value={legalReserve} onChange={(e) => { setLegalReserve(e.target.value); setErrors((p) => ({ ...p, legalReserve: undefined })) }} aria-invalid={errors.legalReserve ? true : undefined} />
+                        <InputGroupInput
+                          id="rate-legal"
+                          type="number"
+                          inputMode="decimal"
+                          min={10}
+                          step="0.5"
+                          value={legalReserve}
+                          onChange={(e) => {
+                            setLegalReserve(e.target.value)
+                            setErrors((p) => ({ ...p, legalReserve: undefined }))
+                          }}
+                          aria-invalid={errors.legalReserve ? true : undefined}
+                        />
                         <InputGroupAddon align="inline-end">
                           <InputGroupText>%</InputGroupText>
                         </InputGroupAddon>
@@ -131,7 +176,19 @@ export function PayoutSettingsScreen() {
                     <Field data-invalid={errors.fates ? true : undefined}>
                       <FieldLabel htmlFor="rate-fates">FATES</FieldLabel>
                       <InputGroup>
-                        <InputGroupInput id="rate-fates" type="number" inputMode="decimal" min={5} step="0.5" value={fates} onChange={(e) => { setFates(e.target.value); setErrors((p) => ({ ...p, fates: undefined })) }} aria-invalid={errors.fates ? true : undefined} />
+                        <InputGroupInput
+                          id="rate-fates"
+                          type="number"
+                          inputMode="decimal"
+                          min={5}
+                          step="0.5"
+                          value={fates}
+                          onChange={(e) => {
+                            setFates(e.target.value)
+                            setErrors((p) => ({ ...p, fates: undefined }))
+                          }}
+                          aria-invalid={errors.fates ? true : undefined}
+                        />
                         <InputGroupAddon align="inline-end">
                           <InputGroupText>%</InputGroupText>
                         </InputGroupAddon>
@@ -141,7 +198,19 @@ export function PayoutSettingsScreen() {
                     <Field data-invalid={errors.other ? true : undefined}>
                       <FieldLabel htmlFor="rate-other">Outros fundos</FieldLabel>
                       <InputGroup>
-                        <InputGroupInput id="rate-other" type="number" inputMode="decimal" min={0} step="0.5" value={other} onChange={(e) => { setOther(e.target.value); setErrors((p) => ({ ...p, other: undefined })) }} aria-invalid={errors.other ? true : undefined} />
+                        <InputGroupInput
+                          id="rate-other"
+                          type="number"
+                          inputMode="decimal"
+                          min={0}
+                          step="0.5"
+                          value={other}
+                          onChange={(e) => {
+                            setOther(e.target.value)
+                            setErrors((p) => ({ ...p, other: undefined }))
+                          }}
+                          aria-invalid={errors.other ? true : undefined}
+                        />
                         <InputGroupAddon align="inline-end">
                           <InputGroupText>%</InputGroupText>
                         </InputGroupAddon>
@@ -160,7 +229,20 @@ export function PayoutSettingsScreen() {
                   <Field data-invalid={errors.inss ? true : undefined} className="max-w-xs">
                     <FieldLabel htmlFor="rate-inss">Alíquota</FieldLabel>
                     <InputGroup>
-                      <InputGroupInput id="rate-inss" type="number" inputMode="decimal" min={0} max={INSS_RATE_MAX * 100} step="0.5" value={inss} onChange={(e) => { setInss(e.target.value); setErrors((p) => ({ ...p, inss: undefined })) }} aria-invalid={errors.inss ? true : undefined} />
+                      <InputGroupInput
+                        id="rate-inss"
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        max={INSS_RATE_MAX * 100}
+                        step="0.5"
+                        value={inss}
+                        onChange={(e) => {
+                          setInss(e.target.value)
+                          setErrors((p) => ({ ...p, inss: undefined }))
+                        }}
+                        aria-invalid={errors.inss ? true : undefined}
+                      />
                       <InputGroupAddon align="inline-end">
                         <InputGroupText>%</InputGroupText>
                       </InputGroupAddon>
@@ -205,11 +287,22 @@ export function PayoutSettingsScreen() {
 
                 <Field data-invalid={errors.effectiveFrom ? true : undefined}>
                   <FieldLabel htmlFor="effective-from">Vigente a partir de</FieldLabel>
-                  <Input id="effective-from" type="month" value={effectiveFrom} min={addMonths(current, -12)} onChange={(e) => { setEffectiveFrom(e.target.value); setErrors((p) => ({ ...p, effectiveFrom: undefined })) }} className="w-48" aria-invalid={errors.effectiveFrom ? true : undefined} />
+                  <Input
+                    id="effective-from"
+                    type="month"
+                    value={effectiveFrom}
+                    min={addMonths(current, -12)}
+                    onChange={(e) => {
+                      setEffectiveFrom(e.target.value)
+                      setErrors((p) => ({ ...p, effectiveFrom: undefined }))
+                    }}
+                    className="w-48"
+                    aria-invalid={errors.effectiveFrom ? true : undefined}
+                  />
                   <FieldDescription>
                     {closedForPeriod
-                      ? `${formatPeriod(effectiveFrom)} já está fechado: o fechamento gravado não muda. A regra vale para novos fechamentos.`
-                      : "O fechamento usa a versão vigente no mês fechado."}
+                      ? `${formatPeriod(effectiveFrom)} já está fechado: o fechamento gravado não muda. Escolha um mês aberto para a nova regra.`
+                      : "O fechamento usa a versão vigente no mês fechado. Salvar o mesmo mês de novo substitui a versão daquele mês."}
                   </FieldDescription>
                   <FieldError>{errors.effectiveFrom}</FieldError>
                 </Field>
@@ -279,42 +372,46 @@ export function PayoutSettingsScreen() {
           <CardDescription>Cada fechamento usa a versão com maior “vigente a partir de” menor ou igual ao mês.</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Vigente a partir de</TableHead>
-                <TableHead className="text-right">Reserva Legal</TableHead>
-                <TableHead className="text-right">FATES</TableHead>
-                <TableHead className="text-right">Outros</TableHead>
-                <TableHead className="text-right">INSS</TableHead>
-                <TableHead className="hidden md:table-cell">Saldo negativo</TableHead>
-                <TableHead className="hidden lg:table-cell">Criado</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {history.map((version) => (
-                <TableRow key={version.id}>
-                  <TableCell className="font-medium">
-                    <span className="flex items-center gap-2">
-                      {formatPeriod(version.effectiveFrom)}
-                      {version.id === active.id && <Badge>vigente</Badge>}
-                      {version.isLegalDefault && <Badge variant="outline">mínimos legais</Badge>}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">{formatPercent(version.legalReserveRate)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{formatPercent(version.fatesRate)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{formatPercent(version.otherFundsRate)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{formatPercent(version.inssRate)}</TableCell>
-                  <TableCell className="hidden md:table-cell">{version.negativeBalancePolicy === "carry_over" ? "Passa para o próximo mês" : "Perdoa"}</TableCell>
-                  <TableCell className="hidden lg:table-cell text-muted-foreground">
-                    {formatDateTime(version.createdAt)} por {version.createdBy}
-                  </TableCell>
+          {history.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhuma versão gravada. Os fechamentos usam os mínimos legais até você salvar a primeira.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Vigente a partir de</TableHead>
+                  <TableHead className="text-right">Reserva Legal</TableHead>
+                  <TableHead className="text-right">FATES</TableHead>
+                  <TableHead className="text-right">Outros</TableHead>
+                  <TableHead className="text-right">INSS</TableHead>
+                  <TableHead className="hidden md:table-cell">Saldo negativo</TableHead>
+                  <TableHead className="hidden lg:table-cell">Criado</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {history.map((version) => (
+                  <TableRow key={version.id ?? version.effectiveFrom}>
+                    <TableCell className="font-medium">
+                      <span className="flex items-center gap-2">
+                        {formatPeriod(version.effectiveFrom)}
+                        {version.id === active.id && <Badge>vigente</Badge>}
+                        {version.isLegalDefault && <Badge variant="outline">mínimos legais</Badge>}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{formatPercent(version.legalReserveRate)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatPercent(version.fatesRate)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatPercent(version.otherFundsRate)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatPercent(version.inssRate)}</TableCell>
+                    <TableCell className="hidden md:table-cell">{version.negativeBalancePolicy === "carry_over" ? "Passa para o próximo mês" : "Perdoa"}</TableCell>
+                    <TableCell className="hidden lg:table-cell text-muted-foreground">
+                      {formatDateTime(version.createdAt)} por {version.createdBy}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
-    </div>
+    </>
   )
 }

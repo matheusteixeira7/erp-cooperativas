@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { EyeIcon, PackageIcon, PlusIcon, Trash2Icon } from "lucide-react"
 
 import { Badge } from "@workspace/ui/components/badge"
@@ -37,32 +38,34 @@ import { MaterialSelect } from "@/components/material-select"
 import { PageHeader } from "@/components/page-header"
 import { PurchasesSection } from "@/components/screens/purchases-section"
 import { PeriodSelect } from "@/components/period-select"
+import { QueryError } from "@/components/query-error"
 import { TableSkeleton } from "@/components/table-skeleton"
-import { currentPeriod, isInPeriod, periodOf, todayIso } from "@/lib/dates"
-import { errorMessage } from "@/lib/demo/errors"
-import { useRequiredSession } from "@/lib/demo/session"
-import { closedPayoutFor, lastPricePerKg, useDemo, useSimulatedLoading, type SaleDraftItem } from "@/lib/demo/store"
-import { MATERIAL_CONDITION_LABEL, type Buyer, type MaterialCondition, type Sale } from "@/lib/demo/types"
+import { currentPeriod, periodOf, todayIso } from "@/lib/dates"
+import { MATERIAL_CONDITION_LABEL, type MaterialCondition } from "@/lib/domain/enums"
 import { itemSubtotal } from "@/lib/domain/payout"
 import { formatDate, formatMoney, formatPricePerKg, formatShortDate, formatWeight, parseDecimal } from "@/lib/format"
-import { useActor } from "@/lib/use-actor"
+import { useRequiredSession } from "@/lib/session"
+import { useTRPC, type RouterOutputs } from "@/lib/trpc/client"
+import { errorMessage } from "@/lib/trpc/errors"
+import { useInvalidateAll } from "@/lib/trpc/hooks"
 
-type DraftItem = SaleDraftItem & { key: string; subtotal: number }
+type Buyer = RouterOutputs["buyers"]["list"][number]
+type Sale = RouterOutputs["sales"]["list"]["items"][number]
+type DraftItem = { key: string; materialTypeId: string; condition: MaterialCondition; weightKg: number; pricePerKg: number; subtotal: number }
 
 export function SalesScreen() {
-  const { data, actions, resetCount } = useDemo()
+  const trpc = useTRPC()
+  const invalidateAll = useInvalidateAll()
   const { session } = useRequiredSession()
-  const actor = useActor()
   const today = todayIso()
   const isManager = session.activeRole === "manager"
 
   // --- list ---
   const [period, setPeriod] = React.useState(currentPeriod())
-  const loading = useSimulatedLoading(`sales-${period}-${resetCount}`)
-  const sales = React.useMemo(
-    () => data.sales.filter((s) => !s.deletedAt && isInPeriod(s.soldOn, period)).sort((a, b) => b.soldOn.localeCompare(a.soldOn)),
-    [data.sales, period],
-  )
+  const salesQuery = useQuery(trpc.sales.list.queryOptions({ period, limit: 100 }))
+  const buyersQuery = useQuery(trpc.buyers.list.queryOptions({ includeInactive: false }))
+  const materialsQuery = useQuery(trpc.materialTypes.list.queryOptions({ includeInactive: false }))
+  const sales = salesQuery.data?.items ?? []
   const [viewing, setViewing] = React.useState<Sale | null>(null)
   const [deleting, setDeleting] = React.useState<Sale | null>(null)
 
@@ -77,19 +80,29 @@ export function SalesScreen() {
   const [items, setItems] = React.useState<DraftItem[]>([])
   const [itemErrors, setItemErrors] = React.useState<{ material?: string; weight?: string; price?: string }>({})
   const [formError, setFormError] = React.useState<string | null>(null)
-  const [saving, setSaving] = React.useState(false)
   const [newBuyerOpen, setNewBuyerOpen] = React.useState(false)
   const weightRef = React.useRef<HTMLInputElement>(null)
 
   const formPeriod = periodOf(soldOn)
-  const formClosed = closedPayoutFor(data, formPeriod)
-  const listClosed = closedPayoutFor(data, period)
-  const activeBuyers = data.buyers.filter((b) => b.active)
-  const activeMaterials = data.materialTypes.filter((m) => m.active)
-  const materialName = (id: string) => data.materialTypes.find((m) => m.id === id)?.name ?? "—"
-  const buyerName = (id: string) => data.buyers.find((b) => b.id === id)?.name ?? "—"
+  const formStatusQuery = useQuery(trpc.payouts.periodStatus.queryOptions({ period: formPeriod }, { enabled: /^\d{4}-\d{2}$/.test(formPeriod) }))
+  const formClosed = formStatusQuery.data?.closed ? formStatusQuery.data : null
+  const listClosed = salesQuery.data?.periodClosed ? salesQuery.data : null
+  const activeBuyers = buyersQuery.data ?? []
+  const activeMaterials = materialsQuery.data ?? []
+  const materialName = (id: string) => activeMaterials.find((m) => m.id === id)?.name ?? "—"
   const conditionLabel = (value: MaterialCondition) => MATERIAL_CONDITION_LABEL[value].toLowerCase()
-  const priceSuggestion = buyer && materialTypeId ? lastPricePerKg(data, { materialTypeId, condition, buyerId: buyer.id }) : null
+
+  const suggestionQuery = useQuery(
+    trpc.materialTypes.lastPrice.queryOptions(
+      { materialTypeId: materialTypeId ?? "", condition, buyerId: buyer?.id ?? "" },
+      { enabled: Boolean(buyer && materialTypeId) },
+    ),
+  )
+  const priceSuggestion = buyer && materialTypeId ? (suggestionQuery.data ?? null) : null
+
+  const createSale = useMutation(trpc.sales.create.mutationOptions())
+  const deleteSale = useMutation(trpc.sales.delete.mutationOptions())
+  const saving = createSale.isPending
 
   const totalWeight = items.reduce((sum, i) => sum + i.weightKg, 0)
   const totalAmount = items.reduce((sum, i) => sum + i.subtotal, 0)
@@ -134,37 +147,32 @@ export function SalesScreen() {
       setFormError("Adicione pelo menos um material.")
       return
     }
-    setSaving(true)
     try {
-      const sale = await actions.createSale(
-        {
-          buyerId: buyer.id,
-          soldOn,
-          items: items.map(({ materialTypeId, condition, weightKg, pricePerKg }) => ({ materialTypeId, condition, weightKg, pricePerKg })),
-          invoiceNumber,
-          note: "",
-        },
-        actor,
-      )
+      const sale = await createSale.mutateAsync({
+        buyerId: buyer.id,
+        soldOn,
+        items: items.map(({ materialTypeId, condition, weightKg, pricePerKg }) => ({ materialTypeId, condition, weightKg, pricePerKg })),
+        invoiceNumber,
+      })
       toast.add({
         type: "success",
         title: "Venda registrada",
-        description: `${buyer.name} · ${formatWeight(sale.totalWeightKg)} · ${formatMoney(sale.totalAmount)}`,
+        description: `${sale.buyerName} · ${formatWeight(sale.totalWeightKg)} · ${formatMoney(sale.totalAmount)}`,
       })
       resetForm()
       setPeriod(periodOf(sale.soldOn))
+      await invalidateAll()
     } catch (error) {
       toast.add({ type: "error", title: "Não foi possível registrar a venda", description: errorMessage(error) })
-    } finally {
-      setSaving(false)
     }
   }
 
   async function handleDelete() {
     if (!deleting) return
     try {
-      await actions.deleteSale(deleting.id)
-      toast.add({ type: "success", title: "Venda excluída", description: `${buyerName(deleting.buyerId)} · ${formatDate(deleting.soldOn)}` })
+      await deleteSale.mutateAsync({ id: deleting.id })
+      await invalidateAll()
+      toast.add({ type: "success", title: "Venda excluída", description: `${deleting.buyerName} · ${formatDate(deleting.soldOn)}` })
     } catch (error) {
       toast.add({ type: "error", title: "Não foi possível excluir", description: errorMessage(error) })
       throw error
@@ -183,7 +191,18 @@ export function SalesScreen() {
           <CardDescription>Escolha o comprador, adicione cada material pesado e finalize.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
-          {formClosed && <ClosedMonthAlert period={formPeriod} payoutId={formClosed.id} />}
+          {formClosed && <ClosedMonthAlert period={formPeriod} payoutId={formClosed.payoutId ?? undefined} />}
+          {(buyersQuery.isError || materialsQuery.isError) && (
+            <QueryError
+              error={buyersQuery.error ?? materialsQuery.error}
+              onRetry={() => {
+                void buyersQuery.refetch()
+                void materialsQuery.refetch()
+              }}
+              retrying={buyersQuery.isFetching || materialsQuery.isFetching}
+              title="Não foi possível carregar compradores e materiais"
+            />
+          )}
 
           <FieldGroup>
             <div className="grid gap-4 md:grid-cols-[1fr_auto_auto]">
@@ -198,9 +217,15 @@ export function SalesScreen() {
                       setFormError(null)
                     }}
                     itemToStringLabel={(item: Buyer) => item.name}
-                    disabled={disabledForm}
+                    disabled={disabledForm || buyersQuery.isPending}
                   >
-                    <ComboboxInput id="sale-buyer" placeholder="Buscar comprador..." className="flex-1" showClear aria-invalid={formError && !buyer ? true : undefined} />
+                    <ComboboxInput
+                      id="sale-buyer"
+                      placeholder={buyersQuery.isPending ? "Carregando compradores…" : "Buscar comprador..."}
+                      className="flex-1"
+                      showClear
+                      aria-invalid={formError && !buyer ? true : undefined}
+                    />
                     <ComboboxContent>
                       <ComboboxEmpty>Nenhum comprador com esse nome. Use “Novo comprador”.</ComboboxEmpty>
                       <ComboboxList>
@@ -208,7 +233,7 @@ export function SalesScreen() {
                           <ComboboxItem key={item.id} value={item}>
                             <span className="flex flex-col">
                               <span>{item.name}</span>
-                              <span className="text-xs text-muted-foreground">{item.contact}</span>
+                              {item.contact && <span className="text-xs text-muted-foreground">{item.contact}</span>}
                             </span>
                           </ComboboxItem>
                         )}
@@ -241,10 +266,11 @@ export function SalesScreen() {
                   <MaterialSelect
                     id="sale-material"
                     materials={activeMaterials}
+                    loading={materialsQuery.isPending}
                     value={materialTypeId}
                     onValueChange={(value) => {
                       setMaterialTypeId(value)
-                      const chosen = value ? data.materialTypes.find((m) => m.id === value) : undefined
+                      const chosen = value ? activeMaterials.find((m) => m.id === value) : undefined
                       if (chosen) setCondition(chosen.defaultCondition)
                       setItemErrors((e) => ({ ...e, material: undefined }))
                     }}
@@ -329,6 +355,8 @@ export function SalesScreen() {
                     </button>{" "}
                     em {formatShortDate(priceSuggestion.on)}. Só sugestão.
                   </>
+                ) : suggestionQuery.isFetching ? (
+                  "Buscando o último preço praticado…"
                 ) : (
                   "Pressione Enter no preço para adicionar rapidamente."
                 )}
@@ -425,11 +453,13 @@ export function SalesScreen() {
         <CardContent>
           {listClosed && (
             <div className="mb-4">
-              <ClosedMonthAlert period={period} payoutId={listClosed.id} />
+              <ClosedMonthAlert period={period} payoutId={listClosed.closedPayoutId ?? undefined} />
             </div>
           )}
-          {loading ? (
+          {salesQuery.isPending ? (
             <TableSkeleton rows={3} columns={5} />
+          ) : salesQuery.isError ? (
+            <QueryError error={salesQuery.error} onRetry={() => void salesQuery.refetch()} retrying={salesQuery.isFetching} title="Não foi possível carregar as vendas" />
           ) : sales.length === 0 ? (
             <Empty className="border">
               <EmptyHeader>
@@ -458,7 +488,7 @@ export function SalesScreen() {
                     <TableCell className="whitespace-nowrap">{formatDate(sale.soldOn)}</TableCell>
                     <TableCell>
                       <span className="flex flex-col">
-                        <span className="font-medium">{buyerName(sale.buyerId)}</span>
+                        <span className="font-medium">{sale.buyerName}</span>
                         {sale.invoiceNumber && <span className="text-xs text-muted-foreground">NF {sale.invoiceNumber}</span>}
                       </span>
                     </TableCell>
@@ -466,7 +496,7 @@ export function SalesScreen() {
                       <span className="flex flex-wrap gap-1">
                         {sale.items.map((item) => (
                           <Badge key={item.id} variant="secondary">
-                            {materialName(item.materialTypeId)} · {conditionLabel(item.condition)}
+                            {item.materialTypeName} · {conditionLabel(item.condition)}
                           </Badge>
                         ))}
                       </span>
@@ -491,10 +521,10 @@ export function SalesScreen() {
               <TableFooter>
                 <TableRow>
                   <TableCell colSpan={3} className="font-medium">
-                    {sales.length} venda(s)
+                    {salesQuery.data.totals.count} venda(s)
                   </TableCell>
-                  <TableCell className="text-right font-medium tabular-nums">{formatWeight(sales.reduce((s, x) => s + x.totalWeightKg, 0))}</TableCell>
-                  <TableCell className="text-right font-semibold tabular-nums">{formatMoney(sales.reduce((s, x) => s + x.totalAmount, 0))}</TableCell>
+                  <TableCell className="text-right font-medium tabular-nums">{formatWeight(salesQuery.data.totals.weightKg)}</TableCell>
+                  <TableCell className="text-right font-semibold tabular-nums">{formatMoney(salesQuery.data.totals.amount)}</TableCell>
                   <TableCell />
                 </TableRow>
               </TableFooter>
@@ -527,7 +557,7 @@ export function SalesScreen() {
               <DialogHeader>
                 <DialogTitle>Venda de {formatDate(viewing.soldOn)}</DialogTitle>
                 <DialogDescription>
-                  {buyerName(viewing.buyerId)}
+                  {viewing.buyerName}
                   {viewing.invoiceNumber ? ` · NF ${viewing.invoiceNumber}` : ""}
                 </DialogDescription>
               </DialogHeader>
@@ -545,7 +575,7 @@ export function SalesScreen() {
                     <TableRow key={item.id}>
                       <TableCell>
                         <span className="flex flex-wrap items-center gap-1.5">
-                          {materialName(item.materialTypeId)}
+                          {item.materialTypeName}
                           <Badge variant="outline">{conditionLabel(item.condition)}</Badge>
                         </span>
                       </TableCell>
@@ -576,7 +606,7 @@ export function SalesScreen() {
         title="Excluir esta venda?"
         description={
           deleting
-            ? `${buyerName(deleting.buyerId)}, ${formatDate(deleting.soldOn)}, ${formatMoney(deleting.totalAmount)}. A venda sai dos cálculos do mês. Esta ação não pode ser desfeita.`
+            ? `${deleting.buyerName}, ${formatDate(deleting.soldOn)}, ${formatMoney(deleting.totalAmount)}. A venda sai dos cálculos do mês. Esta ação não pode ser desfeita.`
             : ""
         }
         confirmLabel="Excluir venda"
@@ -596,12 +626,14 @@ function NewBuyerDialog({
   onOpenChange: (open: boolean) => void
   onCreated: (buyer: Buyer) => void
 }) {
-  const { actions } = useDemo()
+  const trpc = useTRPC()
+  const invalidateAll = useInvalidateAll()
+  const createBuyer = useMutation(trpc.buyers.create.mutationOptions())
   const [name, setName] = React.useState("")
   const [cnpj, setCnpj] = React.useState("")
   const [contact, setContact] = React.useState("")
   const [error, setError] = React.useState<string | null>(null)
-  const [saving, setSaving] = React.useState(false)
+  const saving = createBuyer.isPending
 
   function handleOpenChange(next: boolean) {
     if (saving) return
@@ -620,16 +652,19 @@ function NewBuyerDialog({
       setError("Informe o nome do comprador.")
       return
     }
-    setSaving(true)
+    const digits = cnpj.replace(/\D/g, "")
+    if (digits && digits.length !== 14) {
+      setError("CNPJ deve ter 14 dígitos ou ficar em branco.")
+      return
+    }
     try {
-      const created = await actions.createBuyer({ name, cnpj: cnpj.replace(/\D/g, ""), contact })
+      const created = await createBuyer.mutateAsync({ name, cnpj: digits, contact })
+      await invalidateAll()
       toast.add({ type: "success", title: "Comprador cadastrado", description: created.name })
       onCreated(created)
       handleOpenChange(false)
     } catch (err) {
-      toast.add({ type: "error", title: "Não foi possível cadastrar", description: errorMessage(err) })
-    } finally {
-      setSaving(false)
+      setError(errorMessage(err))
     }
   }
 
@@ -644,7 +679,16 @@ function NewBuyerDialog({
           <FieldGroup>
             <Field data-invalid={error ? true : undefined}>
               <FieldLabel htmlFor="buyer-name">Nome</FieldLabel>
-              <Input id="buyer-name" value={name} onChange={(e) => { setName(e.target.value); setError(null) }} aria-invalid={error ? true : undefined} autoFocus />
+              <Input
+                id="buyer-name"
+                value={name}
+                onChange={(e) => {
+                  setName(e.target.value)
+                  setError(null)
+                }}
+                aria-invalid={error ? true : undefined}
+                autoFocus
+              />
               <FieldError>{error}</FieldError>
             </Field>
             <Field>

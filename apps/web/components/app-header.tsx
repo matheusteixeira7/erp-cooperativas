@@ -3,7 +3,6 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { FlaskConicalIcon } from "lucide-react"
 
 import { Badge } from "@workspace/ui/components/badge"
 import {
@@ -16,12 +15,11 @@ import {
 } from "@workspace/ui/components/breadcrumb"
 import { Separator } from "@workspace/ui/components/separator"
 import { SidebarTrigger } from "@workspace/ui/components/sidebar"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@workspace/ui/components/tooltip"
 
 import { useShell } from "@/components/shell-context"
-import { useRequiredSession } from "@/lib/demo/session"
-import { ROLE_LABEL } from "@/lib/demo/types"
+import { ROLE_LABEL } from "@/lib/domain/enums"
 import { breadcrumbsFor } from "@/lib/navigation"
+import { useRequiredSession } from "@/lib/session"
 
 export function AppHeader() {
   const pathname = usePathname()
@@ -53,13 +51,6 @@ export function AppHeader() {
         </BreadcrumbList>
       </Breadcrumb>
       <div className="ml-auto flex items-center gap-2">
-        <Tooltip>
-          <TooltipTrigger render={<Badge variant="outline" />}>
-            <FlaskConicalIcon />
-            <span className="hidden sm:inline">Protótipo</span>
-          </TooltipTrigger>
-          <TooltipContent>Dados simulados. Nada é salvo em servidor.</TooltipContent>
-        </Tooltip>
         <Badge variant="secondary" className="hidden sm:inline-flex">
           {ROLE_LABEL[session.activeRole]}
         </Badge>

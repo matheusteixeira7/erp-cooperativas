@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { useQuery } from "@tanstack/react-query"
 import {
   ArrowRightIcon,
   CalendarCheckIcon,
@@ -15,14 +16,15 @@ import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Item, ItemContent, ItemDescription, ItemFooter, ItemGroup, ItemMedia, ItemTitle } from "@workspace/ui/components/item"
+import { Skeleton } from "@workspace/ui/components/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@workspace/ui/components/table"
 
 import { PageHeader } from "@/components/page-header"
+import { QueryError } from "@/components/query-error"
 import { StatCard } from "@/components/stat-card"
-import { addMonths, currentPeriod, isInPeriod, todayIso } from "@/lib/dates"
-import { useRequiredSession } from "@/lib/demo/session"
-import { activeMembersOn, closedPayoutFor, runSimulation, useDemo, useSimulatedLoading } from "@/lib/demo/store"
 import { formatDate, formatMoney, formatPeriod, formatWeight } from "@/lib/format"
+import { useRequiredSession } from "@/lib/session"
+import { useTRPC } from "@/lib/trpc/client"
 
 function greeting() {
   const hour = new Date().getHours()
@@ -32,73 +34,49 @@ function greeting() {
 }
 
 export function HomeScreen() {
-  const { data, resetCount } = useDemo()
+  const trpc = useTRPC()
   const { session } = useRequiredSession()
-  const loading = useSimulatedLoading(`home-${resetCount}`, 400)
   const isManager = session.activeRole === "manager"
-  const today = todayIso()
-  const period = currentPeriod()
-  const previousPeriod = addMonths(period, -1)
-
-  const activeToday = activeMembersOn(data.members, today)
-  const todayAttendance = data.attendances.filter((a) => a.date === today)
-  const presentToday = todayAttendance.filter((a) => a.present).length
-  const attendanceDone = todayAttendance.length > 0
-
-  const monthSales = data.sales.filter((s) => !s.deletedAt && isInPeriod(s.soldOn, period))
-  const monthPurchases = data.purchases.filter((p) => !p.deletedAt && isInPeriod(p.purchasedOn, period))
-  const monthExpenses = data.expenses.filter((e) => !e.deletedAt && isInPeriod(e.incurredOn, period))
-  const revenue = monthSales.reduce((sum, s) => sum + s.totalAmount, 0)
-  const purchases = monthPurchases.reduce((sum, p) => sum + p.totalAmount, 0)
-  const expenses = monthExpenses.reduce((sum, e) => sum + e.amount, 0)
-  const partialSurplus = revenue - purchases - expenses
-  const weight = monthSales.reduce((sum, s) => sum + s.totalWeightKg, 0)
-  const pendingAdvances = data.advances.filter((a) => a.status === "pending")
-  const pendingTotal = pendingAdvances.reduce((sum, a) => sum + a.amount, 0)
-  const workedDays = data.attendances.filter((a) => a.present && isInPeriod(a.date, period)).length
-
-  const previousClosed = closedPayoutFor(data, previousPeriod)
-  const previousSimulation = !previousClosed ? runSimulation(data, previousPeriod) : null
-  const lastClosed = [...data.payouts].filter((p) => p.status === "closed").sort((a, b) => b.period.localeCompare(a.period))[0]
-  const unpaidCount = lastClosed ? lastClosed.items.filter((i) => i.netAmount > 0 && !i.paidAt).length : 0
-
-  const recentSales = [...data.sales].filter((s) => !s.deletedAt).sort((a, b) => b.soldOn.localeCompare(a.soldOn)).slice(0, 5)
-  const buyerName = (id: string) => data.buyers.find((b) => b.id === id)?.name ?? "—"
+  const query = useQuery(trpc.dashboard.summary.queryOptions())
+  const data = query.data
+  const loading = query.isPending
 
   const pending: { key: string; title: string; description: string; href: string; action: string; icon: React.ReactNode }[] = []
-  if (!attendanceDone) {
+  if (data && !data.attendance.done) {
     pending.push({
       key: "attendance",
       title: "Chamada de hoje ainda não foi feita",
-      description: `${activeToday.length} cooperados ativos em ${formatDate(today)}.`,
+      description: `${data.attendance.active} cooperados ativos em ${formatDate(data.today)}.`,
       href: "/chamada",
       action: "Fazer chamada",
       icon: <UserCheckIcon />,
     })
   }
-  if (isManager && !previousClosed) {
+  if (data && isManager && !data.previousPeriodClosed) {
     pending.push({
       key: "close",
-      title: `${formatPeriod(previousPeriod)} ainda está aberto`,
-      description:
-        previousSimulation?.ok
-          ? `Sobra distribuível simulada: ${formatMoney(previousSimulation.result.distributableSurplus)}.`
-          : "Confira vendas, despesas e presenças antes de fechar.",
+      title: `${formatPeriod(data.previousPeriod)} ainda está aberto`,
+      description: data.previousSimulation
+        ? `Sobra distribuível simulada: ${formatMoney(data.previousSimulation.distributableSurplus)}.`
+        : "Confira vendas, despesas e presenças antes de fechar.",
       href: "/fechamento",
       action: "Ir para o fechamento",
       icon: <DollarSignIcon />,
     })
   }
-  if (isManager && lastClosed && unpaidCount > 0) {
+  if (data && isManager && data.lastClosed && data.lastClosed.unpaidCount > 0) {
     pending.push({
       key: "paid",
-      title: `${unpaidCount} cooperado(s) sem pagamento confirmado em ${formatPeriod(lastClosed.period)}`,
+      title: `${data.lastClosed.unpaidCount} cooperado(s) sem pagamento confirmado em ${formatPeriod(data.lastClosed.period)}`,
       description: "Depois de fazer os PIX, marque cada cooperado como pago.",
-      href: `/fechamento/${lastClosed.id}`,
+      href: `/fechamento/${data.lastClosed.id}`,
       action: "Confirmar pagamentos",
       icon: <CalendarCheckIcon />,
     })
   }
+
+  const today = data?.today ?? new Date().toISOString().slice(0, 10)
+  const period = data?.period ?? today.slice(0, 7)
 
   return (
     <div className="flex flex-col gap-6">
@@ -116,100 +94,122 @@ export function HomeScreen() {
         </Button>
       </PageHeader>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          loading={loading}
-          label="Chamada de hoje"
-          value={attendanceDone ? `${presentToday} / ${activeToday.length}` : "Pendente"}
-          hint={attendanceDone ? "presentes registrados" : "Nenhuma presença registrada ainda"}
-        />
-        <StatCard loading={loading} label="Vendas do mês" value={formatMoney(revenue)} hint={`${monthSales.length} venda(s) · ${formatWeight(weight)}`} />
-        <StatCard
-          loading={loading}
-          label="Compras e despesas do mês"
-          value={formatMoney(purchases + expenses)}
-          hint={`Compras de material ${formatMoney(purchases)} · despesas ${formatMoney(expenses)}`}
-        />
-        <StatCard
-          loading={loading}
-          label="Sobra parcial"
-          value={formatMoney(partialSurplus)}
-          hint={`${workedDays} diárias até agora · ${pendingAdvances.length} vale(s) pendente(s) somando ${formatMoney(pendingTotal)}`}
-          highlight={partialSurplus > 0}
-        />
-      </div>
+      {query.isError ? (
+        <QueryError error={query.error} onRetry={() => void query.refetch()} retrying={query.isFetching} title="Não foi possível carregar o resumo" />
+      ) : (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard
+              loading={loading}
+              label="Chamada de hoje"
+              value={data ? (data.attendance.done ? `${data.attendance.present} / ${data.attendance.active}` : "Pendente") : "—"}
+              hint={data?.attendance.done ? "presentes registrados" : "Nenhuma presença registrada ainda"}
+            />
+            <StatCard
+              loading={loading}
+              label="Vendas do mês"
+              value={data ? formatMoney(data.sales.amount) : "—"}
+              hint={data ? `${data.sales.count} venda(s) · ${formatWeight(data.sales.weightKg)}` : undefined}
+            />
+            <StatCard
+              loading={loading}
+              label="Compras e despesas do mês"
+              value={data ? formatMoney(data.purchases + data.expenses) : "—"}
+              hint={data ? `Compras de material ${formatMoney(data.purchases)} · despesas ${formatMoney(data.expenses)}` : undefined}
+            />
+            <StatCard
+              loading={loading}
+              label="Sobra parcial"
+              value={data ? formatMoney(data.partialSurplus) : "—"}
+              hint={data ? `${data.workedDays} diárias até agora · ${data.pendingAdvances.count} vale(s) pendente(s) somando ${formatMoney(data.pendingAdvances.amount)}` : undefined}
+              highlight={(data?.partialSurplus ?? 0) > 0}
+            />
+          </div>
 
-      <div className="grid gap-6 lg:grid-cols-5">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Pendências</CardTitle>
-            <CardDescription>O que precisa de atenção agora.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {pending.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Tudo em dia. Nada pendente por aqui.</p>
-            ) : (
-              <ItemGroup className="gap-2">
-                {pending.map((item) => (
-                  <Item key={item.key} variant="outline">
-                    <ItemMedia variant="icon">{item.icon}</ItemMedia>
-                    <ItemContent>
-                      <ItemTitle>{item.title}</ItemTitle>
-                      <ItemDescription>{item.description}</ItemDescription>
-                    </ItemContent>
-                    <ItemFooter className="justify-end">
-                      <Button size="sm" variant="outline" render={<Link href={item.href} />} nativeButton={false}>
-                        {item.action}
-                        <ArrowRightIcon data-icon="inline-end" />
-                      </Button>
-                    </ItemFooter>
-                  </Item>
-                ))}
-              </ItemGroup>
-            )}
-          </CardContent>
-        </Card>
+          <div className="grid gap-6 lg:grid-cols-5">
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <CardTitle>Pendências</CardTitle>
+                <CardDescription>O que precisa de atenção agora.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="flex flex-col gap-2" aria-busy="true">
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-16 w-full" />
+                  </div>
+                ) : pending.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Tudo em dia. Nada pendente por aqui.</p>
+                ) : (
+                  <ItemGroup className="gap-2">
+                    {pending.map((item) => (
+                      <Item key={item.key} variant="outline">
+                        <ItemMedia variant="icon">{item.icon}</ItemMedia>
+                        <ItemContent>
+                          <ItemTitle>{item.title}</ItemTitle>
+                          <ItemDescription>{item.description}</ItemDescription>
+                        </ItemContent>
+                        <ItemFooter className="justify-end">
+                          <Button size="sm" variant="outline" render={<Link href={item.href} />} nativeButton={false}>
+                            {item.action}
+                            <ArrowRightIcon data-icon="inline-end" />
+                          </Button>
+                        </ItemFooter>
+                      </Item>
+                    ))}
+                  </ItemGroup>
+                )}
+              </CardContent>
+            </Card>
 
-        <Card className="lg:col-span-3">
-          <CardHeader>
-            <CardTitle>Últimas vendas</CardTitle>
-            <CardDescription>As cinco saídas de material mais recentes.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {recentSales.length === 0 ? (
-              <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                <TriangleAlertIcon className="size-4" /> Nenhuma venda registrada.
-              </p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Data</TableHead>
-                    <TableHead>Comprador</TableHead>
-                    <TableHead className="text-right">Peso</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {recentSales.map((sale) => (
-                    <TableRow key={sale.id}>
-                      <TableCell className="whitespace-nowrap">{formatDate(sale.soldOn)}</TableCell>
-                      <TableCell>
-                        <span className="flex items-center gap-2">
-                          {buyerName(sale.buyerId)}
-                          {closedPayoutFor(data, sale.soldOn.slice(0, 7)) && <Badge variant="outline">mês fechado</Badge>}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{formatWeight(sale.totalWeightKg)}</TableCell>
-                      <TableCell className="text-right font-medium tabular-nums">{formatMoney(sale.totalAmount)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+            <Card className="lg:col-span-3">
+              <CardHeader>
+                <CardTitle>Últimas vendas</CardTitle>
+                <CardDescription>As cinco saídas de material mais recentes.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="flex flex-col gap-2" aria-busy="true">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <Skeleton key={i} className="h-9 w-full" />
+                    ))}
+                  </div>
+                ) : !data || data.recentSales.length === 0 ? (
+                  <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <TriangleAlertIcon className="size-4" /> Nenhuma venda registrada.
+                  </p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Data</TableHead>
+                        <TableHead>Comprador</TableHead>
+                        <TableHead className="text-right">Peso</TableHead>
+                        <TableHead className="text-right">Total</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {data.recentSales.map((sale) => (
+                        <TableRow key={sale.id}>
+                          <TableCell className="whitespace-nowrap">{formatDate(sale.soldOn)}</TableCell>
+                          <TableCell>
+                            <span className="flex items-center gap-2">
+                              {sale.buyerName}
+                              {sale.periodClosed && <Badge variant="outline">mês fechado</Badge>}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">{formatWeight(sale.totalWeightKg)}</TableCell>
+                          <TableCell className="text-right font-medium tabular-nums">{formatMoney(sale.totalAmount)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
     </div>
   )
 }

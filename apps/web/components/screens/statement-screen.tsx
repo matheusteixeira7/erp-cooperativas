@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useQuery } from "@tanstack/react-query"
 import { ptBR } from "date-fns/locale"
 import { CalendarDaysIcon, CircleDashedIcon, InfoIcon, ReceiptIcon } from "lucide-react"
 
@@ -14,33 +15,24 @@ import { Skeleton } from "@workspace/ui/components/skeleton"
 
 import { PageHeader } from "@/components/page-header"
 import { PeriodSelect } from "@/components/period-select"
+import { QueryError } from "@/components/query-error"
 import { StatCard } from "@/components/stat-card"
-import { currentPeriod, isInPeriod, isoToDate, periodOf } from "@/lib/dates"
-import { useRequiredSession } from "@/lib/demo/session"
-import { useDemo, useSimulatedLoading } from "@/lib/demo/store"
-import { ADVANCE_KIND_LABEL } from "@/lib/demo/types"
+import { currentPeriod, isoToDate, periodOf } from "@/lib/dates"
+import { ADVANCE_KIND_LABEL } from "@/lib/domain/enums"
 import { formatDate, formatDateTime, formatMoney, formatPercent, formatPeriod, formatPeriodLong } from "@/lib/format"
+import { useRequiredSession } from "@/lib/session"
+import { useTRPC } from "@/lib/trpc/client"
 
 export function StatementScreen() {
-  const { data, resetCount } = useDemo()
+  const trpc = useTRPC()
   const { session } = useRequiredSession()
   const current = currentPeriod()
   const [period, setPeriod] = React.useState(current)
-  const loading = useSimulatedLoading(`statement-${period}-${resetCount}`)
+  const query = useQuery(trpc.payouts.memberStatement.queryOptions({ period }, { enabled: Boolean(session.memberId) }))
+  const statement = query.data ?? null
+  const loading = query.isPending && Boolean(session.memberId)
 
-  const member = data.members.find((m) => m.id === session.memberId)
-  const from = member ? periodOf(member.admittedOn) : "2026-01"
-
-  const presences = React.useMemo(
-    () => data.attendances.filter((a) => a.memberId === member?.id && a.present && isInPeriod(a.date, period)).map((a) => a.date).sort(),
-    [data.attendances, member?.id, period],
-  )
-  const payout = data.payouts.find((p) => p.period === period && p.status === "closed")
-  const item = payout?.items.find((i) => i.memberId === member?.id)
-  const deducted = payout ? data.advances.filter((a) => a.deductedInPayoutId === payout.id && a.memberId === member?.id) : []
-  const pendingAdvances = data.advances.filter((a) => a.memberId === member?.id && a.status === "pending" && a.grantedOn <= `${period}-31`)
-
-  if (!member) {
+  if (!session.memberId || (query.isSuccess && statement === null)) {
     return (
       <Empty className="flex-1">
         <EmptyHeader>
@@ -54,12 +46,16 @@ export function StatementScreen() {
     )
   }
 
+  const from = statement ? periodOf(statement.member.admittedOn) : "2026-01"
+  const closed = statement?.closed ?? null
+  const presences = statement?.presences ?? []
+  const pendingAdvances = statement?.pendingAdvances ?? []
   const monthStart = isoToDate(`${period}-01`)
   const selectedDates = presences.map(isoToDate)
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Meu extrato" description={`${member.name} · ${session.cooperativeName}`}>
+      <PageHeader title="Meu extrato" description={`${statement?.member.name ?? session.name} · ${session.cooperativeName}`}>
         <Field orientation="horizontal" className="w-auto">
           <FieldLabel htmlFor="statement-period">Mês</FieldLabel>
           <PeriodSelect id="statement-period" value={period} onValueChange={setPeriod} from={from} />
@@ -72,27 +68,35 @@ export function StatementScreen() {
             <Skeleton key={i} className="h-28 w-full" />
           ))}
         </div>
-      ) : payout && item ? (
+      ) : query.isError ? (
+        <QueryError error={query.error} onRetry={() => void query.refetch()} retrying={query.isFetching} title="Não foi possível carregar o extrato" />
+      ) : closed ? (
         <>
           <div className="flex flex-wrap items-center gap-2">
             <Badge>Mês fechado</Badge>
-            {item.paidAt ? <Badge variant="secondary">Pago em {formatDate(item.paidAt.slice(0, 10))}</Badge> : <Badge variant="outline">Aguardando pagamento</Badge>}
+            {closed.item.paidAt ? <Badge variant="secondary">Pago em {formatDate(closed.item.paidAt.slice(0, 10))}</Badge> : <Badge variant="outline">Aguardando pagamento</Badge>}
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <StatCard label="Dias trabalhados" value={item.workedDays} hint={`de ${payout.totalWorkedDays} diárias da cooperativa`} />
-            <StatCard label="Valor da diária" value={formatMoney(payout.dayValue)} hint="igual para todos os cooperados" />
-            <StatCard label="Bruto" value={formatMoney(item.grossAmount)} hint={`${item.workedDays} dias × ${formatMoney(payout.dayValue)}`} />
-            {(payout.inssTotal > 0 || item.inssAmount > 0) && (
+            <StatCard label="Dias trabalhados" value={closed.item.workedDays} hint={`de ${closed.payout.totalWorkedDays} diárias da cooperativa`} />
+            <StatCard label="Valor da diária" value={formatMoney(closed.payout.dayValue)} hint="igual para todos os cooperados" />
+            <StatCard label="Bruto" value={formatMoney(closed.item.grossAmount)} hint={`${closed.item.workedDays} dias × ${formatMoney(closed.payout.dayValue)}`} />
+            {(closed.payout.inssTotal > 0 || closed.item.inssAmount > 0) && (
               <StatCard
                 label="INSS retido"
-                value={item.inssAmount > 0 ? `− ${formatMoney(item.inssAmount)}` : "Sem desconto"}
-                hint={item.inssAmount > 0 ? `${formatPercent(item.inssRate)} sobre o bruto. A cooperativa recolhe para você.` : "Você está marcado como quem recolhe por fora."}
+                value={closed.item.inssAmount > 0 ? `− ${formatMoney(closed.item.inssAmount)}` : "Sem desconto"}
+                hint={closed.item.inssAmount > 0 ? `${formatPercent(closed.item.inssRate)} sobre o bruto. A cooperativa recolhe para você.` : "Você está marcado como quem recolhe por fora."}
               />
             )}
-            <StatCard label="Vales descontados" value={item.deductionsAmount > 0 ? `− ${formatMoney(item.deductionsAmount)}` : formatMoney(0)} hint={`${deducted.length} vale(s)`} />
-            <StatCard highlight className="sm:col-span-2" label="Líquido a receber" value={formatMoney(item.netAmount)} hint={item.carryOverDebt > 0 ? `Saldo devedor de ${formatMoney(item.carryOverDebt)} passa para o próximo mês.` : `Fechado em ${formatDateTime(payout.closedAt)}.`} />
+            <StatCard label="Vales descontados" value={closed.item.deductionsAmount > 0 ? `− ${formatMoney(closed.item.deductionsAmount)}` : formatMoney(0)} hint={`${closed.deductedAdvances.length} vale(s)`} />
+            <StatCard
+              highlight
+              className="sm:col-span-2"
+              label="Líquido a receber"
+              value={formatMoney(closed.item.netAmount)}
+              hint={closed.item.carryOverDebt > 0 ? `Saldo devedor de ${formatMoney(closed.item.carryOverDebt)} passa para o próximo mês.` : `Fechado em ${formatDateTime(closed.payout.closedAt)}.`}
+            />
           </div>
-          {deducted.length > 0 && (
+          {closed.deductedAdvances.length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle>Vales descontados</CardTitle>
@@ -100,7 +104,7 @@ export function StatementScreen() {
               </CardHeader>
               <CardContent>
                 <ul className="flex flex-col gap-2 text-sm">
-                  {deducted.map((advance) => (
+                  {closed.deductedAdvances.map((advance) => (
                     <li key={advance.id} className="flex items-center justify-between gap-2">
                       <span className="flex flex-col">
                         <span>{advance.description}</span>
@@ -146,7 +150,7 @@ export function StatementScreen() {
         </>
       )}
 
-      {!loading && (
+      {!loading && !query.isError && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">

@@ -1,12 +1,12 @@
 "use client"
 
+import * as React from "react"
 import { useRouter } from "next/navigation"
-import { BugIcon, ChevronsUpDownIcon, LogOutIcon, RotateCcwIcon, UserCogIcon } from "lucide-react"
+import { ChevronsUpDownIcon, LogOutIcon, UserCogIcon } from "lucide-react"
 
 import { Avatar, AvatarFallback } from "@workspace/ui/components/avatar"
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
@@ -17,19 +17,19 @@ import {
   DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu"
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@workspace/ui/components/sidebar"
+import { Spinner } from "@workspace/ui/components/spinner"
 import { toast } from "@workspace/ui/components/toast"
 
-import { useRequiredSession } from "@/lib/demo/session"
-import { useDemo } from "@/lib/demo/store"
-import { ROLE_LABEL, type Role } from "@/lib/demo/types"
+import { ROLE_LABEL, type Role } from "@/lib/domain/enums"
 import { initials } from "@/lib/format"
 import { homeForRole } from "@/lib/navigation"
+import { useRequiredSession } from "@/lib/session"
 
 export function NavUser() {
   const router = useRouter()
   const { isMobile } = useSidebar()
   const { session, logout, switchRole } = useRequiredSession()
-  const { failNext, setFailNext, resetDemo } = useDemo()
+  const [leaving, setLeaving] = React.useState(false)
 
   function handleSwitchRole(role: Role) {
     switchRole(role)
@@ -37,13 +37,9 @@ export function NavUser() {
     toast.add({ type: "info", title: `Agora você está como ${ROLE_LABEL[role]}` })
   }
 
-  function handleReset() {
-    resetDemo()
-    toast.add({ type: "success", title: "Dados de demonstração redefinidos" })
-  }
-
-  function handleLogout() {
-    logout()
+  async function handleLogout() {
+    setLeaving(true)
+    await logout()
     router.replace("/login")
   }
 
@@ -97,20 +93,8 @@ export function NavUser() {
             )}
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuLabel className="text-xs text-muted-foreground">Protótipo</DropdownMenuLabel>
-              <DropdownMenuCheckboxItem checked={failNext} onCheckedChange={(checked) => setFailNext(checked)}>
-                <BugIcon />
-                Simular erro na próxima ação
-              </DropdownMenuCheckboxItem>
-              <DropdownMenuItem onClick={handleReset}>
-                <RotateCcwIcon />
-                Redefinir dados de demonstração
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem onClick={handleLogout}>
-                <LogOutIcon />
+              <DropdownMenuItem onClick={handleLogout} disabled={leaving}>
+                {leaving ? <Spinner /> : <LogOutIcon />}
                 Sair
               </DropdownMenuItem>
             </DropdownMenuGroup>
