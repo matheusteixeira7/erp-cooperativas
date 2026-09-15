@@ -1,6 +1,25 @@
 # Feedback do cliente (Jailson) — draft de requisitos
 
-Status: **draft para aprovação interna**. Depois de aprovado, vira registros na spec (IDs indicados) e volta para o Jailson confirmar as perguntas abertas.
+Status: **aplicado na spec em 2026-09-14** (versão 0.4.0, decisões DEC-006 a DEC-009 em `spec/spec.json`). Como o cliente estava sem contato, as perguntas abertas foram decididas internamente (Matheus delegou). Tudo entrou com `status: proposto`; o Jailson confirma depois, e o que ele discordar vira ajuste pontual. `python3 spec/validar.py` passa com 8 fixtures.
+
+## Decisões tomadas (resumo)
+
+| Pergunta | Decisão | Por quê |
+|---|---|---|
+| INSS: 7,5% ou 11%? | Padrão **7,5%** (o que o cliente pediu), configurável 0–20% com histórico. Contador confirma antes da implantação. | O sistema não trava no valor; trocar é um campo. Nota legal (Lei 10.666/03) registrada em `dominio.json` e RN-028. |
+| INSS: base é o bruto antes dos vales? | **Sim.** Ordem: fundos → diária → bruto → INSS → vales → líquido. Saldo devedor sobre bruto − INSS. | É o que o cliente descreveu; fixture `FX-out-2026-compras-inss` prova a diferença (92,46 vs 43,20). |
+| INSS: tem teto? | **Não na v1.** | Alíquota é fixa, não progressiva; teto seria inconsistente. Se o contador disser que aplica, vira um parâmetro a mais. |
+| INSS: parte patronal? | **Não entra no rateio.** Se existir, é despesa operacional na categoria `inss_patronal`. | Custo da cooperativa sai antes da sobra, não do cooperado. |
+| Cooperados: quem cadastra? | **Só o gestor.** Operador vê a lista. | Já era PL-003; mantido. |
+| Cooperados: importar planilha? | **Não é feature.** Script one-off do time na implantação. | Acontece uma vez; não vale tela. |
+| Compras reduzem a sobra? | **Sim**, em linha própria: sobra = vendas − compras − despesas. | Dinheiro que saiu. Separado das despesas para o gestor ver quanto gastou comprando. |
+| Cooperado vende para a cooperativa? | **Pode.** Vira fornecedor pessoa física comum, pago na hora, fora do rateio. | Misturar com vale confundiria o demonstrativo. |
+| Recibo para o catador? | **Sim**, PDF simples (`purchases.receipt`). | Pagamento em dinheiro sem papel é buraco de auditoria; reusa o gerador de PDF do fechamento. |
+| Estoque agora? | **Não.** Só o financeiro. Estoque segue fase 2. | Escopo já definido; compras entram só como custo. |
+| Estado: só solto/prensado? | **Sim**, enum `loose`/`baled`. Novo valor = migration de uma linha. | O cliente citou dois. Tabela configurável seria tela a mais sem pedido. |
+| Preço: tabela fixa ou negociado? | **Negociado** a cada lançamento, com sugestão do último preço praticado (comprador/fornecedor + material + estado) já na v1. | É como o galpão funciona hoje; a sugestão tira o erro de digitação sem engessar. |
+
+Ordem de implementação fica: TK-023 (estado) → TK-024 (compras) → TK-025 (INSS) → TK-026 (cooperados).
 
 Pedido original, na ordem em que veio:
 
@@ -112,9 +131,11 @@ Cada item de compra ou venda tem, além do tipo de material, o estado: **solto**
 3. REQ-01 (INSS): depende das respostas do contador.
 4. REQ-02 (cooperados): quase tudo já existe; só ajustes.
 
-## Resumo das perguntas para o Jailson (para mandar de uma vez)
+## Confirmações para o Jailson (não bloqueiam; já decidimos e seguimos)
 
-1. INSS: confirmar 7,5% com o contador; base é o bruto antes dos vales?; tem teto?; a cooperativa paga parte patronal?
-2. Compras: reduzem a sobra do mês?; cooperado pode vender para a cooperativa?; precisa recibo para o catador?; quer controle de estoque agora ou só o financeiro?
-3. Estado do material: só solto/prensado, ou mais?; preço é tabela fixa ou negociado?
-4. Cooperados: quem cadastra?; precisa importar planilha?
+Mandar de uma vez, em linguagem de galpão:
+
+1. **INSS**: "Deixamos 7,5% como você pediu, mas pede pro contador confirmar se é 7,5% ou 11% pra cooperativa de vocês. Dá pra trocar na tela de configurações." E: "Tem algum cooperado que não deve ter desconto (aposentado, MEI)? Marcamos ele no cadastro."
+2. **Compras**: "Compra de material entra como gasto do mês e diminui a sobra, certo? Fica numa linha separada das despesas." E: "Vai sair um recibo em PDF pro catador assinar. Serve?"
+3. **Estado do material**: "Só solto e prensado bastam? Se aparecer um terceiro (moído, bag), avisa que a gente inclui."
+4. **Cooperados**: "Excluir cooperado que já trabalhou vira 'desligar' com data, pra não estragar os meses passados. Só apaga de verdade quem foi cadastrado errado e nunca teve nada. Ok?"

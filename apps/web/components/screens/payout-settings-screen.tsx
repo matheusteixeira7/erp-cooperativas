@@ -20,7 +20,7 @@ import { PageHeader } from "@/components/page-header"
 import { addMonths, currentPeriod } from "@/lib/dates"
 import { errorMessage } from "@/lib/demo/errors"
 import { settingsForPeriod, useDemo } from "@/lib/demo/store"
-import type { NegativeBalancePolicy } from "@/lib/domain/payout"
+import { INSS_RATE_MAX, type NegativeBalancePolicy } from "@/lib/domain/payout"
 import { formatDateTime, formatPercent, formatPeriod, parseDecimal } from "@/lib/format"
 import { useActor } from "@/lib/use-actor"
 
@@ -33,15 +33,17 @@ export function PayoutSettingsScreen() {
   const [legalReserve, setLegalReserve] = React.useState(String(active.legalReserveRate * 100))
   const [fates, setFates] = React.useState(String(active.fatesRate * 100))
   const [other, setOther] = React.useState(String(active.otherFundsRate * 100))
+  const [inss, setInss] = React.useState(String(Math.round(active.inssRate * 10000) / 100))
   const [policy, setPolicy] = React.useState<NegativeBalancePolicy>(active.negativeBalancePolicy)
   const [includeLeft, setIncludeLeft] = React.useState(active.includeMembersLeftInPeriod)
   const [effectiveFrom, setEffectiveFrom] = React.useState(current)
-  const [errors, setErrors] = React.useState<{ legalReserve?: string; fates?: string; other?: string; effectiveFrom?: string }>({})
+  const [errors, setErrors] = React.useState<{ legalReserve?: string; fates?: string; other?: string; inss?: string; effectiveFrom?: string }>({})
   const [saving, setSaving] = React.useState(false)
 
   const lr = parseDecimal(legalReserve)
   const ft = parseDecimal(fates)
   const ot = parseDecimal(other)
+  const ir = parseDecimal(inss)
   const sum = (lr ?? 0) + (ft ?? 0) + (ot ?? 0)
   const closedForPeriod = data.payouts.some((p) => p.period === effectiveFrom && p.status === "closed")
 
@@ -51,6 +53,7 @@ export function PayoutSettingsScreen() {
     if (ft === null || ft < 5) next.fates = "Mínimo legal: 5% (Lei 5.764, art. 28)."
     if (ot === null || ot < 0) next.other = "Informe 0 ou um percentual positivo."
     if (sum >= 100) next.other = "A soma dos fundos precisa ser menor que 100%."
+    if (ir === null || ir < 0 || ir > INSS_RATE_MAX * 100) next.inss = `Entre 0% e ${INSS_RATE_MAX * 100}%. Zero desliga o desconto.`
     if (!/^\d{4}-\d{2}$/.test(effectiveFrom)) next.effectiveFrom = "Informe o mês."
     else if (effectiveFrom < addMonths(current, -12)) next.effectiveFrom = "Escolha um mês recente."
     setErrors(next)
@@ -59,7 +62,7 @@ export function PayoutSettingsScreen() {
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
-    if (!validate() || lr === null || ft === null || ot === null) return
+    if (!validate() || lr === null || ft === null || ot === null || ir === null) return
     setSaving(true)
     try {
       const version = await actions.saveSettings({
@@ -67,6 +70,7 @@ export function PayoutSettingsScreen() {
         legalReserveRate: lr / 100,
         fatesRate: ft / 100,
         otherFundsRate: ot / 100,
+        inssRate: ir / 100,
         negativeBalancePolicy: policy,
         includeMembersLeftInPeriod: includeLeft,
         createdBy: actor.name,
@@ -87,7 +91,7 @@ export function PayoutSettingsScreen() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Parâmetros de rateio" description="Percentuais dos fundos legais e regras aplicadas em cada fechamento. Cada alteração vira uma nova versão." />
+      <PageHeader title="Parâmetros de rateio" description="Percentuais dos fundos legais, INSS do cooperado e regras aplicadas em cada fechamento. Cada alteração vira uma nova versão." />
 
       {active.isLegalDefault && (
         <Alert>
@@ -105,14 +109,14 @@ export function PayoutSettingsScreen() {
             <CardHeader>
               <CardTitle>Nova versão dos parâmetros</CardTitle>
               <CardDescription>
-                Vigente hoje: Reserva Legal {formatPercent(active.legalReserveRate)}, FATES {formatPercent(active.fatesRate)}, outros {formatPercent(active.otherFundsRate)}.
+                Vigente hoje: Reserva Legal {formatPercent(active.legalReserveRate)}, FATES {formatPercent(active.fatesRate)}, outros {formatPercent(active.otherFundsRate)}, INSS {formatPercent(active.inssRate)}.
               </CardDescription>
             </CardHeader>
             <CardContent>
               <FieldGroup>
                 <FieldSet>
                   <FieldLegend>Fundos retidos antes do rateio</FieldLegend>
-                  <FieldDescription>Calculados sobre a sobra do mês (vendas menos despesas). O que resta é dividido pelas diárias.</FieldDescription>
+                  <FieldDescription>Calculados sobre a sobra do mês (vendas menos compras de material e despesas). O que resta é dividido pelas diárias.</FieldDescription>
                   <div className="grid gap-4 sm:grid-cols-3">
                     <Field data-invalid={errors.legalReserve ? true : undefined}>
                       <FieldLabel htmlFor="rate-legal">Reserva Legal</FieldLabel>
@@ -151,8 +155,24 @@ export function PayoutSettingsScreen() {
                 </FieldSet>
 
                 <FieldSet>
+                  <FieldLegend>INSS do cooperado</FieldLegend>
+                  <FieldDescription>Retido do bruto de cada cooperado antes dos vales. A cooperativa guarda o total e recolhe via guia. Quem recolhe por fora é marcado no cadastro do cooperado.</FieldDescription>
+                  <Field data-invalid={errors.inss ? true : undefined} className="max-w-xs">
+                    <FieldLabel htmlFor="rate-inss">Alíquota</FieldLabel>
+                    <InputGroup>
+                      <InputGroupInput id="rate-inss" type="number" inputMode="decimal" min={0} max={INSS_RATE_MAX * 100} step="0.5" value={inss} onChange={(e) => { setInss(e.target.value); setErrors((p) => ({ ...p, inss: undefined })) }} aria-invalid={errors.inss ? true : undefined} />
+                      <InputGroupAddon align="inline-end">
+                        <InputGroupText>%</InputGroupText>
+                      </InputGroupAddon>
+                    </InputGroup>
+                    <FieldDescription>Padrão 7,5%. Confirme a alíquota com o contador (a Lei 10.666/03 fala em 11% para cooperativa de trabalho). Zero desliga o desconto.</FieldDescription>
+                    <FieldError>{errors.inss}</FieldError>
+                  </Field>
+                </FieldSet>
+
+                <FieldSet>
                   <FieldLegend>Quando o vale é maior que o bruto</FieldLegend>
-                  <FieldDescription>O líquido nunca fica negativo. A diferença segue esta política.</FieldDescription>
+                  <FieldDescription>O líquido nunca fica negativo. A comparação é feita sobre o bruto já sem o INSS. A diferença segue esta política.</FieldDescription>
                   <RadioGroup value={policy} onValueChange={(value) => setPolicy(value as NegativeBalancePolicy)}>
                     <FieldLabel htmlFor="policy-carry">
                       <Field orientation="horizontal">
@@ -225,6 +245,15 @@ export function PayoutSettingsScreen() {
           </Card>
           <Card>
             <CardHeader>
+              <CardTitle>INSS do cooperado</CardTitle>
+              <CardDescription>Padrão 7,5%, configurável de 0% a 20%.</CardDescription>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground">
+              O cooperado não é empregado, mas contribui para a Previdência. A cooperativa retém do bruto e recolhe. Exporte o relatório “INSS do mês” no detalhe do fechamento para o contador gerar a guia.
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <InfoIcon className="size-4" />
                 Retirada mínima
@@ -257,6 +286,7 @@ export function PayoutSettingsScreen() {
                 <TableHead className="text-right">Reserva Legal</TableHead>
                 <TableHead className="text-right">FATES</TableHead>
                 <TableHead className="text-right">Outros</TableHead>
+                <TableHead className="text-right">INSS</TableHead>
                 <TableHead className="hidden md:table-cell">Saldo negativo</TableHead>
                 <TableHead className="hidden lg:table-cell">Criado</TableHead>
               </TableRow>
@@ -274,6 +304,7 @@ export function PayoutSettingsScreen() {
                   <TableCell className="text-right tabular-nums">{formatPercent(version.legalReserveRate)}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatPercent(version.fatesRate)}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatPercent(version.otherFundsRate)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatPercent(version.inssRate)}</TableCell>
                   <TableCell className="hidden md:table-cell">{version.negativeBalancePolicy === "carry_over" ? "Passa para o próximo mês" : "Perdoa"}</TableCell>
                   <TableCell className="hidden lg:table-cell text-muted-foreground">
                     {formatDateTime(version.createdAt)} por {version.createdBy}

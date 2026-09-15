@@ -1,0 +1,22 @@
+{
+  "id": "EN-fornecedor", "nome": "Fornecedor", "tabela": "suppliers", "tipo_ts": "Supplier",
+  "descricao": "De quem a cooperativa compra material: catador avulso (pessoa física), outra cooperativa ou empresa geradora. Cadastro separado do comprador porque os papéis quase nunca coincidem e os dados são diferentes (CPF/PIX vs CNPJ).",
+  "status": "proposto", "origem": { "tipo": "decisao", "ref": "DEC-008 (2026-09-14), pedido do cliente Jailson" },
+  "refs": { "tipos": ["TP-TipoFornecedor", "TP-CPF", "TP-ChavePix", "TP-Texto"], "entidades": ["EN-cooperativa", "EN-compra"], "validacoes": ["VL-014", "VL-015"], "politicas": ["PL-005"], "api": ["API-suppliers-list", "API-suppliers-create"], "telas": ["UI-vendas"], "fluxos": ["FL-008"], "decisoes": ["DEC-008"] },
+  "campos": [
+    { "nome": "id", "tipo": "TP-Id", "pk": true },
+    { "nome": "cooperative_id", "tipo": "TP-Id", "fk": "EN-cooperativa", "obrigatorio": true },
+    { "nome": "kind", "tipo": "TP-TipoFornecedor", "obrigatorio": true, "descricao": "individual (catador, pessoa física) ou company (cooperativa, empresa)." },
+    { "nome": "name", "tipo": "TP-Texto", "obrigatorio": true, "descricao": "Não é único: dois catadores podem ter o mesmo nome. A UI avisa se já existe nome igual." },
+    { "nome": "cpf", "tipo": "TP-CPF", "obrigatorio": false, "unico_por": "cooperative_id", "pii": true, "descricao": "Só para kind = individual. Opcional porque catador avulso nem sempre informa." },
+    { "nome": "cnpj", "tipo": "string", "regex": "^[0-9]{14}$", "obrigatorio": false, "unico_por": "cooperative_id", "descricao": "Obrigatório quando kind = company (VL-015)." },
+    { "nome": "pix_key", "tipo": "TP-ChavePix", "obrigatorio": false, "pii": true, "descricao": "Para pagar a compra por PIX." },
+    { "nome": "phone", "tipo": "string", "obrigatorio": false },
+    { "nome": "active", "tipo": "boolean", "padrao": true },
+    { "nome": "created_by", "tipo": "TP-Id", "fk": "EN-usuario" },
+    { "nome": "created_at", "tipo": "TP-Timestamp" }, { "nome": "updated_at", "tipo": "TP-Timestamp" }
+  ],
+  "indices": ["UNIQUE (cooperative_id, cpf) WHERE cpf IS NOT NULL", "UNIQUE (cooperative_id, cnpj) WHERE cnpj IS NOT NULL", "INDEX (cooperative_id, name)"],
+  "invariantes": ["kind = company ⇒ cnpj preenchido e cpf nulo.", "kind = individual ⇒ cnpj nulo.", "Não se apaga fornecedor com compras: desativa (active = false)."],
+  "nota": "Cooperado que vende material próprio para a cooperativa é cadastrado como fornecedor pessoa física normal e pago na hora como qualquer compra; isso não passa pelo rateio nem vira vale (DEC-008)."
+}

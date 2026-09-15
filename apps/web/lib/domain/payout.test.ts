@@ -52,11 +52,89 @@ function buildInput(): PayoutInput {
       legalReserveRate: 0.1,
       fatesRate: 0.05,
       otherFundsRate: 0,
+      inssRate: 0,
       negativeBalancePolicy: "carry_over",
       includeMembersLeftInPeriod: true,
     },
   }
 }
+
+describe("INSS retido antes dos vales (RN-028)", () => {
+  it("reproduz a fixture FX-ago-2026-com-inss", () => {
+    const input = buildInput()
+    input.settings.inssRate = 0.075
+    input.members = input.members.map((m) => (m.id === "m6" ? { ...m, inssWithheld: false } : m))
+    const outcome = simulatePayout(input)
+    expect(outcome.ok).toBe(true)
+    if (!outcome.ok) return
+    const r = outcome.result
+    const byId = (id: string) => r.items.find((i) => i.memberId === id)!
+    // bruto e diária não mudam
+    expect(r.dayValue).toBe(213.68)
+    expect(r.distributedTotal).toBe(30769.92)
+    // Ana: 4700,96 × 7,5% = 352,572 → 352,57; líquido = 4700,96 − 352,57 − 200
+    expect(byId("m1").inssBase).toBe(4700.96)
+    expect(byId("m1").inssRate).toBe(0.075)
+    expect(byId("m1").inssAmount).toBe(352.57)
+    expect(byId("m1").netAmount).toBe(4148.39)
+    // Roberto: 4487,28 × 7,5% = 336,546 → 336,55 (half-even sobe porque 0,6 > 0,5)
+    expect(byId("m5").inssAmount).toBe(336.55)
+    expect(byId("m5").netAmount).toBe(3900.73)
+    // Fernanda não contribui pelo sistema
+    expect(byId("m6").inssRate).toBe(0)
+    expect(byId("m6").inssAmount).toBe(0)
+    expect(byId("m6").netAmount).toBe(4700.96)
+    expect(r.inssTotal).toBe(1955.17)
+    expect(r.totalNet).toBe(27694.75)
+    expect(r.warnings.some((w) => w.includes("Fernanda Lima") && w.includes("INSS"))).toBe(true)
+  })
+
+  it("com alíquota zero nada muda em relação ao cálculo antigo", () => {
+    const outcome = simulatePayout(buildInput())
+    expect(outcome.ok).toBe(true)
+    if (!outcome.ok) return
+    expect(outcome.result.inssTotal).toBe(0)
+    expect(outcome.result.totalNet).toBe(29649.92)
+  })
+
+  it("saldo devedor é calculado sobre bruto − INSS (FX-out-2026-compras-inss)", () => {
+    const outcome = simulatePayout({
+      period: "2026-10",
+      sales: [{ soldOn: "2026-10-20", totalAmount: 11000 }],
+      purchases: [
+        { purchasedOn: "2026-10-03", totalAmount: 600 },
+        { purchasedOn: "2026-10-15", totalAmount: 900 },
+      ],
+      expenses: [{ incurredOn: "2026-10-10", amount: 1000 }],
+      attendances: [
+        ...Array.from({ length: 20 }, (_, i) => ({ memberId: "p1", date: `2026-10-${String(i + 1).padStart(2, "0")}`, present: true })),
+        { memberId: "p2", date: "2026-10-01", present: true },
+        { memberId: "p2", date: "2026-10-02", present: true },
+      ],
+      members: [
+        { id: "p1", name: "Paulo Prensa", admittedOn: "2026-01-01" },
+        { id: "p2", name: "Rita Reciclo", admittedOn: "2026-01-01" },
+      ],
+      advances: [{ id: "adv-rita", memberId: "p2", amount: 700, grantedOn: "2026-10-06", status: "pending" }],
+      settings: { legalReserveRate: 0.1, fatesRate: 0.05, otherFundsRate: 0, inssRate: 0.075, negativeBalancePolicy: "carry_over", includeMembersLeftInPeriod: true },
+    })
+    expect(outcome.ok).toBe(true)
+    if (!outcome.ok) return
+    const r = outcome.result
+    expect(r.totalPurchases).toBe(1500)
+    expect(r.surplus).toBe(8500)
+    expect(r.distributableSurplus).toBe(7225)
+    expect(r.dayValue).toBe(328.4)
+    const rita = r.items.find((i) => i.memberId === "p2")!
+    expect(rita.grossAmount).toBe(656.8)
+    expect(rita.inssAmount).toBe(49.26)
+    expect(rita.netAmount).toBe(0)
+    // sem INSS seria 43,20; com INSS retido antes, 700 − 607,54
+    expect(rita.carryOverDebt).toBe(92.46)
+    expect(r.inssTotal).toBe(541.86)
+    expect(r.totalNet).toBe(6075.4)
+  })
+})
 
 describe("simulatePayout", () => {
   it("reproduz a fixture FX-ago-2026-com-fundos", () => {
@@ -79,6 +157,31 @@ describe("simulatePayout", () => {
     const ana = r.items.find((i) => i.memberId === "m1")
     expect(ana?.grossAmount).toBe(4700.96)
     expect(ana?.netAmount).toBe(4500.96)
+  })
+
+  it("compras de material reduzem a sobra em linha própria (RN-003)", () => {
+    const input = buildInput()
+    input.purchases = [
+      { purchasedOn: "2026-08-03", totalAmount: 1500 },
+      { purchasedOn: "2026-08-10", totalAmount: 999, deletedAt: "2026-08-11T00:00:00" }, // excluída: não conta
+      { purchasedOn: "2026-09-01", totalAmount: 999 }, // outro mês: não conta
+    ]
+    const outcome = simulatePayout(input)
+    expect(outcome.ok).toBe(true)
+    if (!outcome.ok) return
+    expect(outcome.result.totalPurchases).toBe(1500)
+    expect(outcome.result.totalExpenses).toBe(12300)
+    expect(outcome.result.surplus).toBe(34700)
+    // fundos: 3470 + 1735 → distribuível 29495
+    expect(outcome.result.distributableSurplus).toBe(29495)
+  })
+
+  it("sem compras, totalPurchases é zero e nada muda", () => {
+    const outcome = simulatePayout(buildInput())
+    expect(outcome.ok).toBe(true)
+    if (!outcome.ok) return
+    expect(outcome.result.totalPurchases).toBe(0)
+    expect(outcome.result.surplus).toBe(36200)
   })
 
   it("retorna NO_SURPLUS quando despesas superam vendas (RN-004)", () => {

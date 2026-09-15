@@ -1,0 +1,16 @@
+{
+  "id": "EN-item-compra", "nome": "Item de compra", "tabela": "purchase_items", "tipo_ts": "PurchaseItem",
+  "descricao": "Um material pesado dentro de uma compra. Usa o mesmo catálogo de tipos de material das vendas; nenhuma lista duplicada.",
+  "status": "proposto", "origem": { "tipo": "decisao", "ref": "DEC-008 (2026-09-14)" },
+  "refs": { "tipos": ["TP-PesoKg", "TP-PrecoPorKg", "TP-DinheiroBRL", "TP-EstadoMaterial"], "entidades": ["EN-compra", "EN-tipo-material"], "regras": ["RN-015", "RN-030"], "validacoes": ["VL-002", "VL-003", "VL-017"], "api": ["API-materialTypes-lastPrice"], "telas": ["UI-vendas"], "decisoes": ["DEC-008", "DEC-009"] },
+  "campos": [
+    { "nome": "id", "tipo": "TP-Id", "pk": true },
+    { "nome": "purchase_id", "tipo": "TP-Id", "fk": "EN-compra", "obrigatorio": true, "on_delete": "cascade" },
+    { "nome": "material_type_id", "tipo": "TP-Id", "fk": "EN-tipo-material", "obrigatorio": true },
+    { "nome": "condition", "tipo": "TP-EstadoMaterial", "obrigatorio": true, "descricao": "Solto ou prensado. Gravado no item; imutável (RN-030). Compra de catador costuma ser solto." },
+    { "nome": "weight_kg", "tipo": "TP-PesoKg", "obrigatorio": true },
+    { "nome": "price_per_kg", "tipo": "TP-PrecoPorKg", "obrigatorio": true },
+    { "nome": "subtotal", "tipo": "TP-DinheiroBRL", "descricao": "round_half_even(weight_kg × price_per_kg, 2). Calculado no serviço; nunca aceito do cliente." }
+  ],
+  "indices": ["INDEX (material_type_id, condition)"]
+}

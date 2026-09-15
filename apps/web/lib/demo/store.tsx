@@ -7,6 +7,7 @@ import * as React from "react"
 
 import { currentPeriod, firstDayOf, lastDayOf, nowIso, periodOf, addMonths } from "@/lib/dates"
 import {
+  INSS_RATE_MAX,
   LEGAL_DEFAULT_SETTINGS,
   itemSubtotal,
   simulatePayout,
@@ -22,10 +23,15 @@ import type {
   DemoData,
   Expense,
   ExpenseCategory,
+  MaterialCondition,
   Member,
+  PaymentMethod,
   Payout,
   PayoutSettingsVersion,
+  Purchase,
   Sale,
+  Supplier,
+  SupplierKind,
 } from "@/lib/demo/types"
 
 const LATENCY_MS = 650
@@ -68,6 +74,7 @@ export function toPayoutSettings(version: PayoutSettingsVersion): PayoutSettings
     legalReserveRate: version.legalReserveRate,
     fatesRate: version.fatesRate,
     otherFundsRate: version.otherFundsRate,
+    inssRate: version.inssRate,
     negativeBalancePolicy: version.negativeBalancePolicy,
     includeMembersLeftInPeriod: version.includeMembersLeftInPeriod,
   }
@@ -85,10 +92,59 @@ export function activeMembersOn(members: Member[], date: string) {
   return members.filter((m) => m.admittedOn <= date && (!m.leftOn || m.leftOn >= date))
 }
 
+/** RN-029: a member with any attendance, advance or payout item can only be deactivated, never hard-deleted. */
+export function memberHasRecords(data: DemoData, memberId: string) {
+  return (
+    data.attendances.some((a) => a.memberId === memberId) ||
+    data.advances.some((a) => a.memberId === memberId) ||
+    data.payouts.some((p) => p.items.some((i) => i.memberId === memberId))
+  )
+}
+
+export type LastPriceQuery = {
+  materialTypeId: string
+  condition: MaterialCondition
+  buyerId?: string
+  supplierId?: string
+}
+
+/**
+ * RN-030 / API-materialTypes-lastPrice: last price practiced with the same buyer (sales)
+ * or supplier (purchases) for material + condition. Soft-deleted documents are ignored.
+ * Suggestion only; the operator confirms.
+ */
+export function lastPricePerKg(data: DemoData, query: LastPriceQuery): { pricePerKg: number; on: string } | null {
+  const candidates: { on: string; createdAt: string; pricePerKg: number }[] = []
+  if (query.buyerId) {
+    for (const sale of data.sales) {
+      if (sale.deletedAt || sale.buyerId !== query.buyerId) continue
+      for (const item of sale.items) {
+        if (item.materialTypeId === query.materialTypeId && item.condition === query.condition) {
+          candidates.push({ on: sale.soldOn, createdAt: sale.createdAt, pricePerKg: item.pricePerKg })
+        }
+      }
+    }
+  }
+  if (query.supplierId) {
+    for (const purchase of data.purchases) {
+      if (purchase.deletedAt || purchase.supplierId !== query.supplierId) continue
+      for (const item of purchase.items) {
+        if (item.materialTypeId === query.materialTypeId && item.condition === query.condition) {
+          candidates.push({ on: purchase.purchasedOn, createdAt: purchase.createdAt, pricePerKg: item.pricePerKg })
+        }
+      }
+    }
+  }
+  candidates.sort((a, b) => b.on.localeCompare(a.on) || b.createdAt.localeCompare(a.createdAt))
+  const latest = candidates[0]
+  return latest ? { pricePerKg: latest.pricePerKg, on: latest.on } : null
+}
+
 export function runSimulation(data: DemoData, period: string): SimulationOutcome {
   return simulatePayout({
     period,
     sales: data.sales,
+    purchases: data.purchases,
     expenses: data.expenses,
     attendances: data.attendances,
     members: data.members,
@@ -99,7 +155,8 @@ export function runSimulation(data: DemoData, period: string): SimulationOutcome
 
 // ---------- Store ----------
 
-export type SaleDraftItem = { materialTypeId: string; weightKg: number; pricePerKg: number }
+export type SaleDraftItem = { materialTypeId: string; condition: MaterialCondition; weightKg: number; pricePerKg: number }
+export type PurchaseDraftItem = SaleDraftItem
 
 type Actor = { userId: string; name: string }
 
@@ -108,6 +165,13 @@ export type DemoActions = {
   createBuyer(input: { name: string; cnpj: string; contact: string }): Promise<Buyer>
   createSale(input: { buyerId: string; soldOn: string; items: SaleDraftItem[]; invoiceNumber: string; note: string }, actor: Actor): Promise<Sale>
   deleteSale(id: string): Promise<void>
+  /** Fornecedor com o mesmo CPF/CNPJ já cadastrado é devolvido em vez de duplicado. */
+  createSupplier(input: { kind: SupplierKind; name: string; cpf: string; cnpj: string; pixKey: string; phone: string }): Promise<Supplier>
+  createPurchase(
+    input: { supplierId: string; purchasedOn: string; items: PurchaseDraftItem[]; paymentMethod: PaymentMethod; paidOn: string | null; note: string },
+    actor: Actor,
+  ): Promise<Purchase>
+  deletePurchase(id: string): Promise<void>
   createExpense(input: { description: string; category: ExpenseCategory; amount: number; incurredOn: string }, actor: Actor): Promise<Expense>
   deleteExpense(id: string): Promise<void>
   createAdvance(input: { memberId: string; kind: AdvanceKind; description: string; amount: number; grantedOn: string }, actor: Actor): Promise<Advance>
@@ -120,6 +184,10 @@ export type DemoActions = {
   createMember(input: Omit<Member, "id" | "leftOn">): Promise<Member>
   updateMember(id: string, input: Partial<Omit<Member, "id">>): Promise<Member>
   deactivateMember(id: string, leftOn: string): Promise<void>
+  /** Limpa left_on. Falha se o cooperado não está desligado (RN-029). */
+  reactivateMember(id: string): Promise<Member>
+  /** Hard delete, só para cooperado sem presença, vale ou item de fechamento (RN-029). */
+  deleteMember(id: string): Promise<void>
   saveSettings(input: Omit<PayoutSettingsVersion, "id" | "createdAt" | "isLegalDefault">): Promise<PayoutSettingsVersion>
 }
 
@@ -207,10 +275,12 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
           assertOpen(current, input.soldOn)
           if (input.items.length === 0) throw new DemoError("ERR-SALE-001")
           if (!current.buyers.some((b) => b.id === input.buyerId)) throw new DemoError("ERR-SALE-002")
+          if (input.items.some((item) => !current.materialTypes.some((m) => m.id === item.materialTypeId))) throw new DemoError("ERR-SALE-002")
           const id = newId("s")
           const items = input.items.map((item, index) => ({
             id: `${id}-i${index + 1}`,
             materialTypeId: item.materialTypeId,
+            condition: item.condition,
             weightKg: item.weightKg,
             pricePerKg: item.pricePerKg,
             subtotal: itemSubtotal(item.weightKg, item.pricePerKg),
@@ -239,6 +309,73 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
           assertOpen(current, sale.soldOn)
           return {
             next: { ...current, sales: current.sales.map((s) => (s.id === id ? { ...s, deletedAt: nowIso() } : s)) },
+            result: undefined,
+          }
+        })
+      },
+
+      async createSupplier(input) {
+        return run((current) => {
+          const cpf = input.kind === "individual" ? input.cpf.replace(/\D/g, "") : ""
+          const cnpj = input.kind === "company" ? input.cnpj.replace(/\D/g, "") : ""
+          const existing = current.suppliers.find((s) => (cpf && s.cpf === cpf) || (cnpj && s.cnpj === cnpj))
+          if (existing) return { next: current, result: existing }
+          if (input.kind === "company" && cnpj.length !== 14) throw new DemoError("ERR-VAL-001")
+          const supplier: Supplier = {
+            id: newId("sup"),
+            kind: input.kind,
+            name: input.name.trim(),
+            cpf,
+            cnpj,
+            pixKey: input.pixKey.trim(),
+            phone: input.phone.replace(/\D/g, ""),
+            active: true,
+          }
+          return { next: { ...current, suppliers: [...current.suppliers, supplier] }, result: supplier }
+        })
+      },
+
+      async createPurchase(input, actor) {
+        return run((current) => {
+          assertOpen(current, input.purchasedOn)
+          if (input.items.length === 0) throw new DemoError("ERR-PURCHASE-001")
+          if (!current.suppliers.some((s) => s.id === input.supplierId && s.active)) throw new DemoError("ERR-PURCHASE-002")
+          if (input.items.some((item) => !current.materialTypes.some((m) => m.id === item.materialTypeId))) throw new DemoError("ERR-PURCHASE-002")
+          if (input.items.some((item) => item.weightKg <= 0 || item.pricePerKg <= 0)) throw new DemoError("ERR-VAL-001")
+          const id = newId("pu")
+          const items = input.items.map((item, index) => ({
+            id: `${id}-i${index + 1}`,
+            materialTypeId: item.materialTypeId,
+            condition: item.condition,
+            weightKg: item.weightKg,
+            pricePerKg: item.pricePerKg,
+            subtotal: itemSubtotal(item.weightKg, item.pricePerKg),
+          }))
+          const purchase: Purchase = {
+            id,
+            supplierId: input.supplierId,
+            purchasedOn: input.purchasedOn,
+            items,
+            totalAmount: round2(items.reduce((sum, i) => sum + i.subtotal, 0)),
+            totalWeightKg: round2(items.reduce((sum, i) => sum + i.weightKg, 0)),
+            paymentMethod: input.paymentMethod,
+            paidOn: input.paidOn,
+            note: input.note.trim(),
+            deletedAt: null,
+            createdBy: actor.userId,
+            createdAt: nowIso(),
+          }
+          return { next: { ...current, purchases: [purchase, ...current.purchases] }, result: purchase }
+        })
+      },
+
+      async deletePurchase(id) {
+        return run((current) => {
+          const purchase = current.purchases.find((p) => p.id === id && !p.deletedAt)
+          if (!purchase) throw new DemoError("ERR-PURCHASE-003")
+          assertOpen(current, purchase.purchasedOn)
+          return {
+            next: { ...current, purchases: current.purchases.map((p) => (p.id === id ? { ...p, deletedAt: nowIso() } : p)) },
             result: undefined,
           }
         })
@@ -358,6 +495,7 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
             period,
             status: "closed",
             grossRevenue: result.grossRevenue,
+            totalPurchases: result.totalPurchases,
             totalExpenses: result.totalExpenses,
             surplus: result.surplus,
             legalReserveAmount: result.legalReserveAmount,
@@ -368,6 +506,7 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
             dayValue: result.dayValue,
             distributedTotal: result.distributedTotal,
             roundingResidual: result.roundingResidual,
+            inssTotal: result.inssTotal,
             totalDeductions: result.totalDeductions,
             totalNet: result.totalNet,
             settingsSnapshot: settings,
@@ -381,8 +520,12 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
               payoutId,
               memberId: item.memberId,
               memberNameSnapshot: item.memberName,
+              memberCpfSnapshot: current.members.find((m) => m.id === item.memberId)?.cpf ?? "",
               workedDays: item.workedDays,
               grossAmount: item.grossAmount,
+              inssBase: item.inssBase,
+              inssRate: item.inssRate,
+              inssAmount: item.inssAmount,
               deductionsAmount: item.deductionsAmount,
               netAmount: item.netAmount,
               carryOverDebt: item.carryOverDebt,
@@ -491,10 +634,30 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
         })
       },
 
+      async reactivateMember(id) {
+        return run((current) => {
+          const existing = current.members.find((m) => m.id === id)
+          if (!existing) throw new DemoError("ERR-MEMBER-002")
+          if (!existing.leftOn) throw new DemoError("ERR-MEMBER-005")
+          const updated: Member = { ...existing, leftOn: null }
+          return { next: { ...current, members: current.members.map((m) => (m.id === id ? updated : m)) }, result: updated }
+        })
+      },
+
+      async deleteMember(id) {
+        return run((current) => {
+          const existing = current.members.find((m) => m.id === id)
+          if (!existing) throw new DemoError("ERR-MEMBER-002")
+          if (memberHasRecords(current, id)) throw new DemoError("ERR-MEMBER-004")
+          return { next: { ...current, members: current.members.filter((m) => m.id !== id) }, result: undefined }
+        })
+      },
+
       async saveSettings(input) {
         return run((current) => {
           if (input.legalReserveRate < 0.1 || input.fatesRate < 0.05) throw new DemoError("ERR-SETTINGS-001")
           if (input.legalReserveRate + input.fatesRate + input.otherFundsRate >= 1) throw new DemoError("ERR-VAL-001")
+          if (input.inssRate < 0 || input.inssRate > INSS_RATE_MAX) throw new DemoError("ERR-SETTINGS-002")
           const version: PayoutSettingsVersion = {
             id: newId("ps"),
             ...input,

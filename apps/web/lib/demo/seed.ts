@@ -10,11 +10,14 @@ import type {
   DemoData,
   DemoUser,
   Expense,
+  MaterialCondition,
   MaterialType,
   Member,
   Payout,
   PayoutSettingsVersion,
+  Purchase,
   Sale,
+  Supplier,
 } from "./types"
 
 export const COOPERATIVE_NAME = "Cooperativa Recicla Vida"
@@ -47,15 +50,15 @@ export const DEMO_USERS: DemoUser[] = [
 ]
 
 const members: Member[] = [
-  { id: "m1", name: "Ana Maria Silva", cpf: "52601815906", pixKey: "52601815906", phone: "11987654321", admittedOn: "2023-03-06", leftOn: null, notes: "", hasAccess: true },
-  { id: "m2", name: "Carlos Eduardo Santos", cpf: "08301661305", pixKey: "carlos.santos@gmail.com", phone: "11976543210", admittedOn: "2023-03-06", leftOn: null, notes: "", hasAccess: false },
-  { id: "m3", name: "João Pedro Oliveira", cpf: "18609139034", pixKey: "+5511965432109", phone: "11965432109", admittedOn: "2023-08-14", leftOn: null, notes: "Opera a prensa.", hasAccess: false },
-  { id: "m4", name: "Maria Aparecida Costa", cpf: "99603082430", pixKey: "99603082430", phone: "11954321098", admittedOn: "2024-01-08", leftOn: null, notes: "", hasAccess: false },
-  { id: "m5", name: "Roberto Souza", cpf: "62819482112", pixKey: "roberto.souza@outlook.com", phone: "11943210987", admittedOn: "2024-05-20", leftOn: null, notes: "", hasAccess: false },
-  { id: "m6", name: "Fernanda Lima", cpf: "99351819019", pixKey: "99351819019", phone: "11932109876", admittedOn: "2025-02-03", leftOn: null, notes: "", hasAccess: false },
-  { id: "m7", name: "Gabriel Martins", cpf: "93786579741", pixKey: "+5511921098765", phone: "11921098765", admittedOn: "2026-08-03", leftOn: null, notes: "Entrou em agosto/2026.", hasAccess: false },
-  { id: "m8", name: "Paulo Henrique Rocha", cpf: "54323194897", pixKey: "54323194897", phone: "11910987654", admittedOn: "2022-11-07", leftOn: "2026-07-31", notes: "Desligado a pedido.", hasAccess: false },
-  { id: "m9", name: "Juliana Ferreira", cpf: "75749118606", pixKey: "juliana.ferreira@gmail.com", phone: "11909876543", admittedOn: "2026-09-01", leftOn: null, notes: "", hasAccess: false },
+  { id: "m1", name: "Ana Maria Silva", cpf: "52601815906", pixKey: "52601815906", phone: "11987654321", admittedOn: "2023-03-06", leftOn: null, inssWithheld: true, notes: "", hasAccess: true },
+  { id: "m2", name: "Carlos Eduardo Santos", cpf: "08301661305", pixKey: "carlos.santos@gmail.com", phone: "11976543210", admittedOn: "2023-03-06", leftOn: null, inssWithheld: true, notes: "", hasAccess: false },
+  { id: "m3", name: "João Pedro Oliveira", cpf: "18609139034", pixKey: "+5511965432109", phone: "11965432109", admittedOn: "2023-08-14", leftOn: null, inssWithheld: true, notes: "Opera a prensa.", hasAccess: false },
+  { id: "m4", name: "Maria Aparecida Costa", cpf: "99603082430", pixKey: "99603082430", phone: "11954321098", admittedOn: "2024-01-08", leftOn: null, inssWithheld: true, notes: "", hasAccess: false },
+  { id: "m5", name: "Roberto Souza", cpf: "62819482112", pixKey: "roberto.souza@outlook.com", phone: "11943210987", admittedOn: "2024-05-20", leftOn: null, inssWithheld: true, notes: "", hasAccess: false },
+  { id: "m6", name: "Fernanda Lima", cpf: "99351819019", pixKey: "99351819019", phone: "11932109876", admittedOn: "2025-02-03", leftOn: null, inssWithheld: false, notes: "Aposentada: recolhe INSS por fora.", hasAccess: false },
+  { id: "m7", name: "Gabriel Martins", cpf: "93786579741", pixKey: "+5511921098765", phone: "11921098765", admittedOn: "2026-08-03", leftOn: null, inssWithheld: true, notes: "Entrou em agosto/2026.", hasAccess: false },
+  { id: "m8", name: "Paulo Henrique Rocha", cpf: "54323194897", pixKey: "54323194897", phone: "11910987654", admittedOn: "2022-11-07", leftOn: "2026-07-31", inssWithheld: true, notes: "Desligado a pedido.", hasAccess: false },
+  { id: "m9", name: "Juliana Ferreira", cpf: "75749118606", pixKey: "juliana.ferreira@gmail.com", phone: "11909876543", admittedOn: "2026-09-01", leftOn: null, inssWithheld: true, notes: "", hasAccess: false },
 ]
 
 const buyers: Buyer[] = [
@@ -64,33 +67,47 @@ const buyers: Buyer[] = [
   { id: "b3", name: "Papéis do Vale", cnpj: "45678912000155", contact: "Marcos · (12) 3922-5544", active: true },
 ]
 
-const materialTypes: MaterialType[] = [
-  { id: "mt-pet-cristal", name: "PET Cristal", category: "plastic", active: true },
-  { id: "mt-pet-colorido", name: "PET Colorido", category: "plastic", active: true },
-  { id: "mt-pead", name: "PEAD (plástico duro)", category: "plastic", active: true },
-  { id: "mt-pp", name: "PP", category: "plastic", active: true },
-  { id: "mt-papelao", name: "Papelão Ondulado", category: "paper", active: true },
-  { id: "mt-papel-branco", name: "Papel Branco", category: "paper", active: true },
-  { id: "mt-papel-misto", name: "Papel Misto", category: "paper", active: true },
-  { id: "mt-aluminio", name: "Alumínio (lata)", category: "metal", active: true },
-  { id: "mt-ferro", name: "Ferro / Sucata", category: "metal", active: true },
-  { id: "mt-cobre", name: "Cobre", category: "metal", active: true },
-  { id: "mt-vidro", name: "Vidro", category: "glass", active: true },
-  { id: "mt-rejeito", name: "Rejeito", category: "waste", active: false },
+const suppliers: Supplier[] = [
+  { id: "sup-ze", kind: "individual", name: "José Carlos (Seu Zé, catador)", cpf: "39053344705", cnpj: "", pixKey: "+5511988887777", phone: "11988887777", active: true },
+  { id: "sup-dona-lu", kind: "individual", name: "Luzia Andrade (catadora)", cpf: "", cnpj: "", pixKey: "", phone: "11977776666", active: true },
+  { id: "sup-coop-vizinha", kind: "company", name: "Cooperativa Vizinha Recicla", cpf: "", cnpj: "23456789000101", pixKey: "financeiro@coopvizinha.org", phone: "1133334444", active: true },
 ]
+
+const materialTypes: MaterialType[] = [
+  { id: "mt-pet-cristal", name: "PET Cristal", category: "plastic", defaultCondition: "baled", active: true },
+  { id: "mt-pet-colorido", name: "PET Colorido", category: "plastic", defaultCondition: "baled", active: true },
+  { id: "mt-pead", name: "PEAD (plástico duro)", category: "plastic", defaultCondition: "baled", active: true },
+  { id: "mt-pp", name: "PP", category: "plastic", defaultCondition: "baled", active: true },
+  { id: "mt-papelao", name: "Papelão Ondulado", category: "paper", defaultCondition: "baled", active: true },
+  { id: "mt-papel-branco", name: "Papel Branco", category: "paper", defaultCondition: "baled", active: true },
+  { id: "mt-papel-misto", name: "Papel Misto", category: "paper", defaultCondition: "baled", active: true },
+  { id: "mt-aluminio", name: "Alumínio (lata)", category: "metal", defaultCondition: "baled", active: true },
+  { id: "mt-ferro", name: "Ferro / Sucata", category: "metal", defaultCondition: "loose", active: true },
+  { id: "mt-cobre", name: "Cobre", category: "metal", defaultCondition: "loose", active: true },
+  { id: "mt-vidro", name: "Vidro", category: "glass", defaultCondition: "loose", active: true },
+  { id: "mt-rejeito", name: "Rejeito", category: "waste", defaultCondition: "loose", active: false },
+]
+
+const materialById = new Map(materialTypes.map((m) => [m.id, m]))
+
+/** Condition of a seeded item: explicit value, else the material's default. */
+function conditionFor(materialTypeId: string, condition?: MaterialCondition): MaterialCondition {
+  return condition ?? materialById.get(materialTypeId)?.defaultCondition ?? "baled"
+}
 
 type SeedSale = {
   id: string
   buyerId: string
   soldOn: string
   invoiceNumber?: string
-  items: { materialTypeId: string; weightKg: number; pricePerKg: number }[]
+  items: { materialTypeId: string; condition?: MaterialCondition; weightKg: number; pricePerKg: number }[]
 }
 
 function buildSale(seed: SeedSale): Sale {
   const items = seed.items.map((item, index) => ({
     id: `${seed.id}-i${index + 1}`,
     materialTypeId: item.materialTypeId,
+    condition: conditionFor(item.materialTypeId, item.condition),
     weightKg: item.weightKg,
     pricePerKg: item.pricePerKg,
     subtotal: itemSubtotal(item.weightKg, item.pricePerKg),
@@ -139,6 +156,52 @@ const sales: Sale[] = [
   buildSale({ id: "s-set-1", buyerId: "b3", soldOn: "2026-09-04", items: [
     { materialTypeId: "mt-papelao", weightKg: 5000, pricePerKg: 0.7 },
     { materialTypeId: "mt-papel-misto", weightKg: 1500, pricePerKg: 0.45 },
+  ] }),
+]
+
+type SeedPurchase = {
+  id: string
+  supplierId: string
+  purchasedOn: string
+  paymentMethod: Purchase["paymentMethod"]
+  paidOn: string | null
+  items: { materialTypeId: string; condition?: MaterialCondition; weightKg: number; pricePerKg: number }[]
+}
+
+function buildPurchase(seed: SeedPurchase): Purchase {
+  const items = seed.items.map((item, index) => ({
+    id: `${seed.id}-i${index + 1}`,
+    materialTypeId: item.materialTypeId,
+    // Material comprado de catador chega solto, salvo indicação contrária.
+    condition: item.condition ?? "loose",
+    weightKg: item.weightKg,
+    pricePerKg: item.pricePerKg,
+    subtotal: itemSubtotal(item.weightKg, item.pricePerKg),
+  }))
+  return {
+    id: seed.id,
+    supplierId: seed.supplierId,
+    purchasedOn: seed.purchasedOn,
+    items,
+    totalAmount: Math.round(items.reduce((sum, i) => sum + i.subtotal, 0) * 100) / 100,
+    totalWeightKg: items.reduce((sum, i) => sum + i.weightKg, 0),
+    paymentMethod: seed.paymentMethod,
+    paidOn: seed.paidOn,
+    note: "",
+    deletedAt: null,
+    createdBy: "u-jorge",
+    createdAt: `${seed.purchasedOn}T08:45:00`,
+  }
+}
+
+// Agosto/2026 não tem compras de propósito: os números batem com FX-ago-2026-com-fundos.
+const purchases: Purchase[] = [
+  buildPurchase({ id: "pu-set-1", supplierId: "sup-ze", purchasedOn: "2026-09-02", paymentMethod: "cash", paidOn: "2026-09-02", items: [
+    { materialTypeId: "mt-papelao", weightKg: 800, pricePerKg: 0.3 },
+    { materialTypeId: "mt-pet-cristal", weightKg: 120, pricePerKg: 1.5 },
+  ] }),
+  buildPurchase({ id: "pu-set-2", supplierId: "sup-coop-vizinha", purchasedOn: "2026-09-08", paymentMethod: "pix", paidOn: null, items: [
+    { materialTypeId: "mt-pet-cristal", weightKg: 500, pricePerKg: 1.8 },
   ] }),
 ]
 
@@ -266,10 +329,25 @@ const settingsHistory: PayoutSettingsVersion[] = [
     legalReserveRate: 0.1,
     fatesRate: 0.05,
     otherFundsRate: 0,
+    inssRate: 0,
     negativeBalancePolicy: "carry_over",
     includeMembersLeftInPeriod: true,
     createdBy: "u-marta",
     createdAt: "2026-01-05T09:12:00",
+    isLegalDefault: true,
+  },
+  // INSS do cooperado passa a ser retido a partir de agosto/2026 (pedido do cliente, DEC-006).
+  {
+    id: "ps-2",
+    effectiveFrom: "2026-08",
+    legalReserveRate: 0.1,
+    fatesRate: 0.05,
+    otherFundsRate: 0,
+    inssRate: 0.075,
+    negativeBalancePolicy: "carry_over",
+    includeMembersLeftInPeriod: true,
+    createdBy: "u-marta",
+    createdAt: "2026-08-01T09:00:00",
     isLegalDefault: true,
   },
 ]
@@ -292,6 +370,7 @@ const payouts: Payout[] = [
     period: "2026-07",
     status: "closed",
     grossRevenue: 41200,
+    totalPurchases: 0,
     totalExpenses: 11900,
     surplus: 29300,
     legalReserveAmount: 2930,
@@ -302,6 +381,7 @@ const payouts: Payout[] = [
     dayValue: JULY_DAY_VALUE,
     distributedTotal: 24904.86,
     roundingResidual: 0.14,
+    inssTotal: 0,
     totalDeductions: 250,
     totalNet: 24654.86,
     settingsSnapshot: settingsHistory[0]!,
@@ -317,8 +397,12 @@ const payouts: Payout[] = [
         payoutId: "p-2026-07",
         memberId: item.memberId,
         memberNameSnapshot: item.name,
+        memberCpfSnapshot: members.find((m) => m.id === item.memberId)?.cpf ?? "",
         workedDays: item.days,
         grossAmount: gross,
+        inssBase: gross,
+        inssRate: 0,
+        inssAmount: 0,
         deductionsAmount: item.deductions,
         netAmount: Math.round((gross - item.deductions) * 100) / 100,
         carryOverDebt: 0,
@@ -333,8 +417,10 @@ export function createSeed(): DemoData {
   return structuredClone({
     members,
     buyers,
+    suppliers,
     materialTypes,
     sales,
+    purchases,
     expenses,
     advances,
     attendances,

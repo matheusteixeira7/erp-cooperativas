@@ -1,5 +1,5 @@
 {
-  "descricao": "Regras que um gestor da cooperativa reconhece. Cada uma tem fórmula ou condição, e pelo menos um exemplo numérico quando é cálculo. Fixtures completas em 80-testes/fixtures.json.",
+  "descricao": "Regras que um gestor da cooperativa reconhece. Cada uma tem fórmula ou condição, e pelo menos um exemplo numérico quando é cálculo. Fixtures completas em 80-testes/fixtures.json. Cálculo do fechamento: RN-003 (sobra) → RN-010 (fundos) → RN-001 (diária) → RN-002 (bruto, INSS via RN-028, vales, líquido) → RN-009 (saldo devedor) → RN-012 (resíduo).",
   "regras": [
     {
       "id": "RN-001",
@@ -84,8 +84,8 @@
       "id": "RN-002",
       "nome": "Rateio individual do cooperado",
       "categoria": "calculo",
-      "descricao": "Cada cooperado recebe seus dias trabalhados vezes o valor da diária, menos vales pendentes. O líquido nunca fica negativo.",
-      "formula": "gross = worked_days × day_value; net = max(0, gross − deductions); carry_over_debt = max(0, deductions − gross)",
+      "descricao": "Cada cooperado recebe seus dias trabalhados vezes o valor da diária (bruto), menos o INSS retido (RN-028), menos vales pendentes. O líquido nunca fica negativo. Ordem: bruto → INSS → vales → líquido.",
+      "formula": "gross = worked_days × day_value; inss = RN-028(gross); net = max(0, gross − inss − deductions); carry_over_debt = max(0, deductions − (gross − inss))",
       "entradas": [
         {
           "nome": "worked_days",
@@ -100,10 +100,16 @@
           "nome": "deductions",
           "tipo": "TP-DinheiroBRL",
           "vem_de": "RN-020"
+        },
+        {
+          "nome": "inss",
+          "tipo": "TP-DinheiroBRL",
+          "vem_de": "RN-028"
         }
       ],
       "saida": {
         "gross": "TP-DinheiroBRL",
+        "inss": "TP-DinheiroBRL",
         "net": "TP-DinheiroBRL",
         "carry_over_debt": "TP-DinheiroBRL"
       },
@@ -112,28 +118,51 @@
           "dado": {
             "worked_days": 22,
             "day_value": 213.68,
+            "inss_rate": 0,
             "deductions": 200.0
           },
           "espera": {
             "gross": 4700.96,
+            "inss": 0,
             "net": 4500.96,
             "carry_over_debt": 0
           },
           "fixture": "FX-ago-2026-com-fundos",
+          "cooperado": "Ana Maria Silva",
+          "nota": "Sem INSS (alíquota zero)."
+        },
+        {
+          "dado": {
+            "worked_days": 22,
+            "day_value": 213.68,
+            "inss_rate": 0.075,
+            "deductions": 200.0
+          },
+          "espera": {
+            "gross": 4700.96,
+            "inss": 352.57,
+            "net": 4148.39,
+            "carry_over_debt": 0
+          },
+          "fixture": "FX-ago-2026-com-inss",
           "cooperado": "Ana Maria Silva"
         },
         {
           "dado": {
-            "worked_days": 1,
-            "day_value": 213.68,
-            "deductions": 250.0
+            "worked_days": 2,
+            "day_value": 328.4,
+            "inss_rate": 0.075,
+            "deductions": 700.0
           },
           "espera": {
-            "gross": 213.68,
+            "gross": 656.8,
+            "inss": 49.26,
             "net": 0,
-            "carry_over_debt": 36.32
+            "carry_over_debt": 92.46
           },
-          "nota": "RN-009 decide o destino dos 36,32"
+          "fixture": "FX-out-2026-compras-inss",
+          "cooperado": "Rita Reciclo",
+          "nota": "Saldo devedor calculado sobre bruto − INSS (607,54), não sobre o bruto."
         }
       ],
       "status": "confirmado",
@@ -148,7 +177,8 @@
         ],
         "regras": [
           "RN-009",
-          "RN-020"
+          "RN-020",
+          "RN-028"
         ],
         "api": [
           "API-payouts-simulate"
@@ -159,7 +189,11 @@
         ],
         "testes": [
           "TS-002",
-          "TS-014"
+          "TS-014",
+          "TS-019"
+        ],
+        "decisoes": [
+          "DEC-006"
         ]
       }
     },
@@ -167,18 +201,30 @@
       "id": "RN-003",
       "nome": "Sobra do mês",
       "categoria": "calculo",
-      "descricao": "Receita bruta de vendas do mês menos despesas operacionais do mês. Regime de competência: vale a data do lançamento. Lançamentos com deleted_at não contam.",
-      "formula": "surplus = Σ sales.total_amount (sold_on in period, not deleted) − Σ expenses.amount (incurred_on in period, not deleted)",
+      "descricao": "Receita bruta de vendas do mês, menos compras de material do mês, menos despesas operacionais do mês. Regime de competência: vale a data do lançamento. Lançamentos com deleted_at não contam. Compras aparecem como linha própria no fechamento, separadas das despesas.",
+      "formula": "surplus = Σ sales.total_amount (sold_on in period, not deleted) − Σ purchases.total_amount (purchased_on in period, not deleted) − Σ expenses.amount (incurred_on in period, not deleted)",
       "exemplos": [
         {
           "dado": {
             "gross_revenue": 48500.0,
+            "total_purchases": 0,
             "total_expenses": 12300.0
           },
           "espera": {
             "surplus": 36200.0
           },
           "fixture": "FX-ago-2026-com-fundos"
+        },
+        {
+          "dado": {
+            "gross_revenue": 11000.0,
+            "total_purchases": 1500.0,
+            "total_expenses": 1000.0
+          },
+          "espera": {
+            "surplus": 8500.0
+          },
+          "fixture": "FX-out-2026-compras-inss"
         }
       ],
       "status": "confirmado",
@@ -189,6 +235,7 @@
       "refs": {
         "entidades": [
           "EN-venda",
+          "EN-compra",
           "EN-despesa",
           "EN-fechamento"
         ],
@@ -196,7 +243,11 @@
           "RN-022"
         ],
         "testes": [
-          "TS-003"
+          "TS-003",
+          "TS-020"
+        ],
+        "decisoes": [
+          "DEC-008"
         ]
       }
     },
@@ -328,7 +379,7 @@
       "id": "RN-009",
       "nome": "Vale maior que o bruto",
       "categoria": "decisao-parametrizada",
-      "descricao": "Quando deductions > gross, net = 0. A diferença segue a política da cooperativa: carry_over (padrão) cria um vale kind = carry_over, pending, na competência seguinte, apontando origin_advance_id; forgive descarta.",
+      "descricao": "Quando deductions > (gross − inss), net = 0. A diferença segue a política da cooperativa: carry_over (padrão) cria um vale kind = carry_over, pending, na competência seguinte, apontando origin_advance_id; forgive descarta. O INSS é retido antes dos vales, por isso a base de comparação é bruto − INSS (RN-002).",
       "parametro": "payout_settings.negative_balance_policy",
       "exemplos": [
         {
@@ -356,6 +407,23 @@
             "net": 0,
             "novo_vale": null
           }
+        },
+        {
+          "dado": {
+            "gross": 656.8,
+            "inss": 49.26,
+            "deductions": 700.0,
+            "policy": "carry_over"
+          },
+          "espera": {
+            "net": 0,
+            "novo_vale": {
+              "kind": "carry_over",
+              "amount": 92.46,
+              "granted_on": "2026-11-01"
+            }
+          },
+          "fixture": "FX-out-2026-compras-inss"
         }
       ],
       "status": "proposto",
@@ -370,10 +438,12 @@
           "EN-parametros-rateio"
         ],
         "regras": [
-          "RN-002"
+          "RN-002",
+          "RN-028"
         ],
         "testes": [
-          "TS-014"
+          "TS-014",
+          "TS-019"
         ]
       }
     },
@@ -434,7 +504,7 @@
       "id": "RN-011",
       "nome": "Mês fechado é imutável",
       "categoria": "integridade",
-      "descricao": "Existindo fechamento closed para o período, nenhuma presença, venda, despesa ou vale com data dentro dele pode ser criado, alterado ou excluído. Para mexer, o gestor reabre (RN-023).",
+      "descricao": "Existindo fechamento closed para o período, nenhuma presença, venda, compra, despesa ou vale com data dentro dele pode ser criado, alterado ou excluído. Para mexer, o gestor reabre (RN-023).",
       "condicao": "exists payout(period = month(date), status = closed)",
       "erro": "ERR-PAYOUT-003",
       "status": "proposto",
@@ -447,6 +517,7 @@
           "EN-fechamento",
           "EN-presenca",
           "EN-venda",
+          "EN-compra",
           "EN-despesa",
           "EN-vale"
         ],
@@ -460,6 +531,8 @@
           "API-attendance-saveDaily",
           "API-sales-create",
           "API-sales-delete",
+          "API-purchases-create",
+          "API-purchases-delete",
           "API-expenses-create",
           "API-expenses-delete",
           "API-advances-create",
@@ -568,9 +641,9 @@
     },
     {
       "id": "RN-015",
-      "nome": "Total da venda é calculado no servidor",
+      "nome": "Total da venda e da compra é calculado no servidor",
       "categoria": "integridade",
-      "descricao": "subtotal = round2(weight_kg × price_per_kg); total_amount = Σ subtotal; total_weight_kg = Σ weight_kg. O cliente não envia totais; se enviar, são ignorados.",
+      "descricao": "Vale para vendas e compras: subtotal = round2(weight_kg × price_per_kg); total_amount = Σ subtotal; total_weight_kg = Σ weight_kg. O cliente não envia totais; se enviar, são ignorados.",
       "exemplos": [
         {
           "dado": {
@@ -605,10 +678,13 @@
       "refs": {
         "entidades": [
           "EN-venda",
-          "EN-item-venda"
+          "EN-item-venda",
+          "EN-compra",
+          "EN-item-compra"
         ],
         "api": [
-          "API-sales-create"
+          "API-sales-create",
+          "API-purchases-create"
         ],
         "testes": [
           "TS-011"
@@ -617,7 +693,7 @@
     },
     {
       "id": "RN-016",
-      "nome": "Venda tem pelo menos um item",
+      "nome": "Venda e compra têm pelo menos um item",
       "categoria": "validacao-de-negocio",
       "condicao": "items.length == 0",
       "erro": "ERR-SALE-001",
@@ -628,16 +704,19 @@
       },
       "refs": {
         "entidades": [
-          "EN-venda"
+          "EN-venda",
+          "EN-compra"
         ],
         "api": [
-          "API-sales-create"
+          "API-sales-create",
+          "API-purchases-create"
         ],
         "erros": [
-          "ERR-SALE-001"
+          "ERR-SALE-001",
+          "ERR-PURCHASE-001"
         ]
       },
-      "descricao": "Não existe venda sem material. O servidor rejeita lista de itens vazia."
+      "descricao": "Não existe venda nem compra sem material. O servidor rejeita lista de itens vazia (venda: ERR-SALE-001; compra: ERR-PURCHASE-001)."
     },
     {
       "id": "RN-017",
@@ -759,7 +838,7 @@
       "id": "RN-022",
       "nome": "Exclusão de lançamento é soft delete",
       "categoria": "integridade",
-      "descricao": "Venda e despesa não somem do banco: recebem deleted_at. Só em mês aberto (RN-011). Ficam fora de listagens e cálculos.",
+      "descricao": "Venda, compra e despesa não somem do banco: recebem deleted_at. Só em mês aberto (RN-011). Ficam fora de listagens e cálculos.",
       "status": "proposto",
       "origem": {
         "tipo": "complemento",
@@ -768,6 +847,7 @@
       "refs": {
         "entidades": [
           "EN-venda",
+          "EN-compra",
           "EN-despesa"
         ],
         "regras": [
@@ -778,6 +858,7 @@
         ],
         "api": [
           "API-sales-delete",
+          "API-purchases-delete",
           "API-expenses-delete"
         ]
       }
@@ -892,6 +973,177 @@
         ],
         "decisoes": [
           "DEC-005"
+        ]
+      }
+    },
+    {
+      "id": "RN-028",
+      "nome": "INSS retido na retirada do cooperado",
+      "categoria": "regulatorio",
+      "descricao": "No fechamento, para cada cooperado com inss_withheld = true, o sistema calcula o INSS sobre o bruto do mês (antes de vales e de qualquer outro desconto) com a alíquota vigente nos parâmetros (RN-026) e desconta antes dos vales. Cooperado com inss_withheld = false (aposentado, MEI, recolhe por fora) tem INSS zero e aparece marcado no demonstrativo. O valor retido fica com a cooperativa para recolher via guia; o total do mês é gravado no fechamento. Sem teto e sem parte patronal na v1 (DEC-006).",
+      "formula": "inss_base = gross; inss = member.inss_withheld ? round2(gross × inss_rate) : 0; inss_total = Σ inss",
+      "parametro": "payout_settings.inss_rate (padrão 0.075)",
+      "exemplos": [
+        {
+          "dado": {
+            "gross": 4700.96,
+            "inss_rate": 0.075,
+            "inss_withheld": true
+          },
+          "espera": {
+            "inss": 352.57
+          },
+          "fixture": "FX-ago-2026-com-inss",
+          "cooperado": "Ana Maria Silva"
+        },
+        {
+          "dado": {
+            "gross": 4487.28,
+            "inss_rate": 0.075,
+            "inss_withheld": true
+          },
+          "espera": {
+            "inss": 336.55
+          },
+          "fixture": "FX-ago-2026-com-inss",
+          "cooperado": "Roberto Souza",
+          "nota": "4487,28 × 0,075 = 336,546 → 336,55 (half-even)."
+        },
+        {
+          "dado": {
+            "gross": 4700.96,
+            "inss_rate": 0.075,
+            "inss_withheld": false
+          },
+          "espera": {
+            "inss": 0
+          },
+          "fixture": "FX-ago-2026-com-inss",
+          "cooperado": "Fernanda Lima"
+        }
+      ],
+      "base_legal": "Alíquota pedida pelo cliente: 7,5%. Lei 10.666/03 art. 4º fala em 11% para cooperativa de trabalho; contador deve confirmar. O sistema aceita qualquer valor entre 0 e 20% (VL-016).",
+      "status": "proposto",
+      "origem": {
+        "tipo": "decisao",
+        "ref": "DEC-006 (2026-09-14), pedido do cliente Jailson"
+      },
+      "refs": {
+        "entidades": [
+          "EN-parametros-rateio",
+          "EN-cooperado",
+          "EN-fechamento",
+          "EN-fechamento-item"
+        ],
+        "regras": [
+          "RN-002",
+          "RN-009",
+          "RN-026"
+        ],
+        "validacoes": [
+          "VL-016"
+        ],
+        "api": [
+          "API-payouts-simulate",
+          "API-payouts-close",
+          "API-payouts-export"
+        ],
+        "telas": [
+          "UI-parametros",
+          "UI-fechamento",
+          "UI-extrato-cooperado",
+          "UI-cooperados"
+        ],
+        "testes": [
+          "TS-019"
+        ],
+        "fixtures": [
+          "FX-ago-2026-com-inss",
+          "FX-out-2026-compras-inss"
+        ],
+        "decisoes": [
+          "DEC-006"
+        ]
+      }
+    },
+    {
+      "id": "RN-029",
+      "nome": "Exclusão e reativação de cooperado",
+      "categoria": "integridade",
+      "descricao": "'Excluir' cooperado é desligar (left_on). Cooperado com qualquer presença, vale ou item de fechamento não pode ser removido do banco: members.delete retorna erro e a UI oferece 'Desligar'. Cooperado cadastrado por engano, sem nenhum lançamento, pode ser removido de verdade (hard delete, auditado). Reativar = limpar left_on, auditado; o cooperado volta à chamada a partir de hoje.",
+      "condicao": "delete: exists(attendances | advances | payout_items where member_id) → ERR-MEMBER-004. reactivate: left_on IS NULL → ERR-MEMBER-005",
+      "erro": "ERR-MEMBER-004",
+      "status": "proposto",
+      "origem": {
+        "tipo": "decisao",
+        "ref": "DEC-007 (2026-09-14)"
+      },
+      "refs": {
+        "entidades": [
+          "EN-cooperado",
+          "EN-presenca",
+          "EN-vale",
+          "EN-fechamento-item"
+        ],
+        "politicas": [
+          "PL-003",
+          "PL-006"
+        ],
+        "api": [
+          "API-members-delete",
+          "API-members-reactivate",
+          "API-members-deactivate"
+        ],
+        "erros": [
+          "ERR-MEMBER-004",
+          "ERR-MEMBER-005"
+        ],
+        "telas": [
+          "UI-cooperados"
+        ],
+        "fluxos": [
+          "FL-006"
+        ],
+        "testes": [
+          "TS-022"
+        ],
+        "decisoes": [
+          "DEC-007"
+        ]
+      }
+    },
+    {
+      "id": "RN-030",
+      "nome": "Estado do material fica gravado no item",
+      "categoria": "integridade",
+      "descricao": "Todo item de venda ou compra tem condition (solto ou prensado), obrigatório. O valor é gravado no item e nunca muda depois; alterar o padrão do tipo de material (default_condition) ou a lista de estados não altera vendas e compras antigas. Preço por kg é informado para a combinação material + estado. bale_count só faz sentido quando condition = baled.",
+      "status": "proposto",
+      "origem": {
+        "tipo": "decisao",
+        "ref": "DEC-009 (2026-09-14)"
+      },
+      "refs": {
+        "tipos": [
+          "TP-EstadoMaterial"
+        ],
+        "entidades": [
+          "EN-item-venda",
+          "EN-item-compra",
+          "EN-tipo-material"
+        ],
+        "api": [
+          "API-sales-create",
+          "API-purchases-create",
+          "API-materialTypes-lastPrice"
+        ],
+        "telas": [
+          "UI-vendas"
+        ],
+        "testes": [
+          "TS-021"
+        ],
+        "decisoes": [
+          "DEC-009"
         ]
       }
     }

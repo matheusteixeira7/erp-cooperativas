@@ -30,7 +30,7 @@
           ]
         },
         {
-          "rotulo": "Vendas",
+          "rotulo": "Vendas e compras",
           "rota": "/vendas",
           "icone": "ShoppingCart",
           "perfis": [
@@ -245,10 +245,10 @@
     },
     {
       "id": "UI-vendas",
-      "nome": "Vendas e pesagem",
+      "nome": "Vendas e compras",
       "rota": "/vendas",
       "dispositivo": "tablet/desktop",
-      "descricao": "Formulário: comprador (combobox com criar novo), data. Linha de inserção rápida: material, peso, preço/kg, botão +. Tabela de itens com remover. Card escuro com peso total e valor total. Botão 'Finalizar venda'. Abaixo, lista das vendas do mês.",
+      "descricao": "Duas seções empilhadas na mesma página. Seção VENDAS (em cima): comprador (combobox com criar novo), data; linha de inserção rápida: material, estado (solto/prensado, pré-preenchido com o padrão do material), peso, preço/kg (com sugestão do último preço para esse comprador + material + estado), botão +. Tabela de itens com remover. Card escuro com peso total e valor total. Botão 'Finalizar venda'. Abaixo, lista das vendas do mês. Seção COMPRAS (embaixo, mesmo layout em outra cor): fornecedor (combobox com criar novo: pessoa física ou empresa), data, itens iguais aos da venda, forma de pagamento (dinheiro/PIX) e 'já pago'. Botão 'Finalizar compra'. Lista das compras do mês com resumo por fornecedor e por material, botão 'Recibo'.",
       "perfis": [
         "manager",
         "operator"
@@ -256,47 +256,93 @@
       "dados": {
         "carrega": [
           "API-buyers-list",
+          "API-suppliers-list",
           "API-materialTypes-list",
-          "API-sales-list"
+          "API-materialTypes-lastPrice",
+          "API-sales-list",
+          "API-purchases-list"
         ],
         "envia": [
           "API-sales-create",
           "API-buyers-create",
-          "API-sales-delete"
+          "API-sales-delete",
+          "API-purchases-create",
+          "API-suppliers-create",
+          "API-purchases-delete"
         ]
       },
       "campos": [
         {
           "nome": "buyerId",
           "tipo": "combobox",
-          "obrigatorio": true
+          "obrigatorio": true,
+          "secao": "vendas"
         },
         {
           "nome": "soldOn",
           "tipo": "date",
           "padrao": "hoje",
-          "max": "hoje"
+          "max": "hoje",
+          "secao": "vendas"
+        },
+        {
+          "nome": "invoiceNumber",
+          "tipo": "text",
+          "obrigatorio": false,
+          "secao": "vendas"
+        },
+        {
+          "nome": "supplierId",
+          "tipo": "combobox",
+          "obrigatorio": true,
+          "secao": "compras"
+        },
+        {
+          "nome": "purchasedOn",
+          "tipo": "date",
+          "padrao": "hoje",
+          "max": "hoje",
+          "secao": "compras"
+        },
+        {
+          "nome": "paymentMethod",
+          "tipo": "radio (Dinheiro | PIX)",
+          "padrao": "cash",
+          "secao": "compras"
+        },
+        {
+          "nome": "paidOn",
+          "tipo": "date",
+          "obrigatorio": false,
+          "padrao": "= purchasedOn quando 'já pago' marcado",
+          "secao": "compras"
         },
         {
           "nome": "item.materialTypeId",
-          "tipo": "select"
+          "tipo": "select",
+          "secao": "ambas"
+        },
+        {
+          "nome": "item.condition",
+          "tipo": "toggle (Solto | Prensado)",
+          "padrao": "materialType.defaultCondition",
+          "obrigatorio": true,
+          "secao": "ambas"
         },
         {
           "nome": "item.weightKg",
           "tipo": "number",
           "step": 0.01,
-          "min": 0.01
+          "min": 0.01,
+          "secao": "ambas"
         },
         {
           "nome": "item.pricePerKg",
           "tipo": "number",
           "step": 0.0001,
-          "min": 0.0001
-        },
-        {
-          "nome": "invoiceNumber",
-          "tipo": "text",
-          "obrigatorio": false
+          "min": 0.0001,
+          "sugestao": "API-materialTypes-lastPrice",
+          "secao": "ambas"
         }
       ],
       "acoes": [
@@ -317,6 +363,25 @@
             "manager"
           ],
           "confirmacao": "diálogo com comprador, data e valor"
+        },
+        {
+          "rotulo": "Finalizar compra",
+          "api": "API-purchases-create",
+          "confirmacao": false,
+          "feedback": "toast + limpa formulário"
+        },
+        {
+          "rotulo": "Recibo (lista de compras)",
+          "api": "API-purchases-receipt",
+          "feedback": "abre PDF"
+        },
+        {
+          "rotulo": "Excluir compra (lista)",
+          "api": "API-purchases-delete",
+          "perfis": [
+            "manager"
+          ],
+          "confirmacao": "diálogo com fornecedor, data e valor"
         }
       ],
       "estados": [
@@ -328,8 +393,11 @@
       ],
       "requisitos_ux": [
         "Subtotal e total recalculam ao digitar (só exibição; servidor recalcula).",
-        "Último preço praticado por material/comprador aparece como sugestão (fase 2).",
-        "Campos numéricos com inputMode='decimal'."
+        "Último preço praticado por material + estado + comprador/fornecedor aparece como placeholder no campo de preço; operador confirma ou digita outro.",
+        "Estado do material: toggle de dois botões grandes ('Solto' / 'Prensado'), não um select, para ser rápido com luva.",
+        "Campos numéricos com inputMode='decimal'.",
+        "Vendas e compras têm cores distintas (ex.: venda verde, compra laranja) para o operador não confundir.",
+        "Cadastro inline de fornecedor pede primeiro 'Pessoa ou Empresa?' e só depois os campos."
       ],
       "status": "confirmado",
       "origem": {
@@ -341,25 +409,43 @@
           "EN-venda",
           "EN-item-venda",
           "EN-comprador",
-          "EN-tipo-material"
+          "EN-tipo-material",
+          "EN-compra",
+          "EN-item-compra",
+          "EN-fornecedor"
         ],
         "regras": [
           "RN-015",
-          "RN-016"
+          "RN-016",
+          "RN-030"
         ],
         "api": [
           "API-buyers-list",
-          "API-buyers-create",
+          "API-suppliers-list",
           "API-materialTypes-list",
-          "API-sales-create",
+          "API-materialTypes-lastPrice",
           "API-sales-list",
-          "API-sales-delete"
+          "API-purchases-list",
+          "API-sales-create",
+          "API-buyers-create",
+          "API-sales-delete",
+          "API-purchases-create",
+          "API-suppliers-create",
+          "API-purchases-delete",
+          "API-purchases-receipt"
         ],
         "fluxos": [
-          "FL-003"
+          "FL-003",
+          "FL-008"
         ],
         "tarefas": [
-          "TK-016"
+          "TK-016",
+          "TK-023",
+          "TK-024"
+        ],
+        "decisoes": [
+          "DEC-008",
+          "DEC-009"
         ]
       }
     },
@@ -454,7 +540,7 @@
       "nome": "Fechamento e rateio mensal",
       "rota": "/fechamento",
       "dispositivo": "desktop",
-      "descricao": "Seletor de período + 'Atualizar'. Cards: Receita, Despesas, Fundos (Reserva Legal, FATES, outros), Sobra distribuível, Valor da diária (destaque, com 'baseado em N diárias'). Tabela: cooperado, dias, bruto, vales, líquido, saldo devedor. Rodapé: total distribuído e resíduo de arredondamento. Botão 'Fechar mês' → diálogo de confirmação. Se fechado: botão vira 'Mês fechado' + link para histórico.",
+      "descricao": "Seletor de período + 'Atualizar'. Cards: Receita de vendas, Compras de material, Despesas, Fundos (Reserva Legal, FATES, outros), Sobra distribuível, Valor da diária (destaque, com 'baseado em N diárias'), INSS retido no mês. Tabela: cooperado, dias, bruto, INSS, vales, líquido, saldo devedor. Cooperado sem desconto de INSS tem badge 'sem INSS'. Rodapé: total distribuído, total de INSS, resíduo de arredondamento. Botão 'Fechar mês' → diálogo de confirmação. Se fechado: botão vira 'Mês fechado' + link para histórico.",
       "perfis": [
         "manager"
       ],
@@ -474,12 +560,18 @@
         {
           "rotulo": "Fechar mês",
           "api": "API-payouts-close",
-          "confirmacao": "Diálogo: 'Fechar agosto/2026? R$ 30.770,00 serão rateados entre 7 cooperados. Vales pendentes serão descontados. Esta ação bloqueia lançamentos do mês.' Se mês corrente, aviso extra."
+          "confirmacao": "Diálogo: 'Fechar agosto/2026? R$ 30.770,00 serão rateados entre 7 cooperados. R$ 1.955,17 de INSS serão retidos. Vales pendentes serão descontados. Esta ação bloqueia lançamentos do mês.' Se mês corrente, aviso extra."
         },
         {
           "rotulo": "Exportar (CSV/PDF)",
           "api": "API-payouts-export",
           "disponivel": "após fechar"
+        },
+        {
+          "rotulo": "Exportar INSS do mês (CSV/PDF)",
+          "api": "API-payouts-export",
+          "disponivel": "após fechar",
+          "nota": "report = inss"
         }
       ],
       "estados": [
@@ -493,7 +585,8 @@
       "requisitos_ux": [
         "Warnings da simulação em lista amarela acima da tabela.",
         "Cooperado com 0 dias aparece esmaecido.",
-        "Se RN-024 aplicável, badge 'abaixo do mínimo' na linha."
+        "Se RN-024 aplicável, badge 'abaixo do mínimo' na linha.",
+        "Se inssRate = 0 nos parâmetros, a coluna e o card de INSS ficam ocultos."
       ],
       "status": "confirmado",
       "origem": {
@@ -513,7 +606,8 @@
           "RN-010",
           "RN-012",
           "RN-019",
-          "RN-024"
+          "RN-024",
+          "RN-028"
         ],
         "api": [
           "API-payouts-simulate",
@@ -524,7 +618,8 @@
           "FL-001"
         ],
         "tarefas": [
-          "TK-018"
+          "TK-018",
+          "TK-025"
         ]
       }
     },
@@ -532,7 +627,7 @@
       "id": "UI-historico-fechamentos",
       "nome": "Histórico de fechamentos",
       "rota": "/fechamento/historico e /fechamento/[id]",
-      "descricao": "Lista de meses fechados (período, status, sobra distribuível, diária, data). Detalhe: mesmo layout do fechamento, somente leitura, lendo o snapshot. Checkbox 'pago' por cooperado. Botão 'Reabrir mês' (pede motivo).",
+      "descricao": "Lista de meses fechados (período, status, sobra distribuível, diária, data). Detalhe: mesmo layout do fechamento, somente leitura, lendo o snapshot. Checkbox 'pago' por cooperado. Botão 'Reabrir mês' (pede motivo). Exportação do demonstrativo e do relatório de INSS.",
       "perfis": [
         "manager"
       ],
@@ -600,9 +695,10 @@
       "id": "UI-cooperados",
       "nome": "Cooperados",
       "rota": "/cooperados",
-      "descricao": "Tabela com busca (nome/CPF), filtro ativos/todos. Sheet lateral para criar/editar. Ação 'Desligar' pede data. CPF mascarado na tabela, completo no detalhe.",
+      "descricao": "Tabela com busca (nome/CPF), filtro Ativos / Desligados / Todos. Sheet lateral para criar/editar. Ações por linha: Editar, Desligar (pede data), Reativar (só desligado), Excluir (só habilitado quando o cooperado não tem nenhum lançamento; senão o botão fica desabilitado com tooltip 'Tem lançamentos: use Desligar'). CPF mascarado na tabela, completo no detalhe. Operador vê a lista, sem botões de ação.",
       "perfis": [
-        "manager"
+        "manager",
+        "operator (somente leitura)"
       ],
       "dados": {
         "carrega": [
@@ -612,7 +708,9 @@
         "envia": [
           "API-members-create",
           "API-members-update",
-          "API-members-deactivate"
+          "API-members-deactivate",
+          "API-members-reactivate",
+          "API-members-delete"
         ]
       },
       "campos": [
@@ -634,13 +732,21 @@
           "tipo": "date"
         },
         {
+          "nome": "inssWithheld",
+          "tipo": "switch",
+          "rotulo": "Contribui INSS pelo sistema",
+          "padrao": true,
+          "ajuda": "Desligue para aposentado, MEI ou quem recolhe por fora."
+        },
+        {
           "nome": "notes"
         }
       ],
       "estados": [
         "carregando",
         "vazio (CTA cadastrar primeiro cooperado)",
-        "erro CPF duplicado no campo"
+        "erro CPF duplicado no campo",
+        "erro ERR-MEMBER-004 (tem lançamentos) → oferece Desligar"
       ],
       "status": "proposto",
       "origem": {
@@ -666,22 +772,56 @@
           "API-members-byId",
           "API-members-create",
           "API-members-update",
-          "API-members-deactivate"
+          "API-members-deactivate",
+          "API-members-reactivate",
+          "API-members-delete"
         ],
         "fluxos": [
           "FL-006"
         ],
         "tarefas": [
-          "TK-019"
+          "TK-019",
+          "TK-026"
+        ],
+        "regras": [
+          "RN-029"
+        ],
+        "erros": [
+          "ERR-MEMBER-004",
+          "ERR-MEMBER-005"
+        ],
+        "decisoes": [
+          "DEC-007"
         ]
-      }
+      },
+      "acoes": [
+        {
+          "rotulo": "Salvar",
+          "api": "API-members-create"
+        },
+        {
+          "rotulo": "Desligar",
+          "api": "API-members-deactivate",
+          "confirmacao": "pede data de desligamento"
+        },
+        {
+          "rotulo": "Reativar",
+          "api": "API-members-reactivate",
+          "confirmacao": "diálogo simples"
+        },
+        {
+          "rotulo": "Excluir",
+          "api": "API-members-delete",
+          "confirmacao": "diálogo: 'Excluir X de verdade? Só é possível porque não há lançamentos.'"
+        }
+      ]
     },
     {
       "id": "UI-extrato-cooperado",
       "nome": "Meu extrato",
       "rota": "/extrato",
       "dispositivo": "celular",
-      "descricao": "Cooperado escolhe o mês. Vê: dias trabalhados (com calendário marcando presenças), valor da diária, bruto, vales descontados (lista), líquido, saldo devedor se houver, status pago. Se o mês não está fechado: mostra só dias trabalhados até agora.",
+      "descricao": "Cooperado escolhe o mês. Vê: dias trabalhados (com calendário marcando presenças), valor da diária, bruto, INSS retido (ou 'sem desconto de INSS'), vales descontados (lista), líquido, saldo devedor se houver, status pago. Se o mês não está fechado: mostra só dias trabalhados até agora.",
       "perfis": [
         "member"
       ],
@@ -716,6 +856,9 @@
         ],
         "tarefas": [
           "TK-020"
+        ],
+        "regras": [
+          "RN-028"
         ]
       }
     },
@@ -723,7 +866,7 @@
       "id": "UI-parametros",
       "nome": "Parâmetros de rateio",
       "rota": "/configuracoes/rateio",
-      "descricao": "Formulário: Reserva Legal %, FATES %, outros fundos %, política de saldo negativo (radio: passa para o próximo mês / perdoa), incluir desligados no mês (switch), vigente a partir de (mês). Abaixo, histórico de versões. Explicação curta de cada fundo com link para a lei.",
+      "descricao": "Formulário: Reserva Legal %, FATES %, outros fundos %, INSS do cooperado % (padrão 7,5%; texto de ajuda: 'confirme a alíquota com o contador'), política de saldo negativo (radio: passa para o próximo mês / perdoa), incluir desligados no mês (switch), vigente a partir de (mês). Abaixo, histórico de versões. Explicação curta de cada fundo com link para a lei.",
       "perfis": [
         "manager"
       ],
@@ -752,6 +895,13 @@
           "min": 0
         },
         {
+          "nome": "inssRate",
+          "tipo": "percent",
+          "min": 0,
+          "max": 20,
+          "padrao": 7.5
+        },
+        {
           "nome": "negativeBalancePolicy",
           "tipo": "radio"
         },
@@ -767,7 +917,8 @@
       "estados": [
         "padrões legais (isDefault, aviso 'usando mínimos legais')",
         "salvando",
-        "erro abaixo do mínimo no campo"
+        "erro abaixo do mínimo no campo",
+        "erro INSS fora da faixa no campo"
       ],
       "status": "confirmado",
       "origem": {
@@ -780,20 +931,24 @@
         ],
         "regras": [
           "RN-010",
-          "RN-026"
+          "RN-026",
+          "RN-028"
         ],
         "validacoes": [
-          "VL-013"
+          "VL-013",
+          "VL-016"
         ],
         "api": [
           "API-payoutSettings-get",
           "API-payoutSettings-update"
         ],
         "tarefas": [
-          "TK-019"
+          "TK-019",
+          "TK-025"
         ],
         "decisoes": [
-          "DEC-002"
+          "DEC-002",
+          "DEC-006"
         ]
       }
     }

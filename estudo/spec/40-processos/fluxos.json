@@ -30,7 +30,8 @@
           "RN-017",
           "RN-018",
           "RN-019",
-          "RN-023"
+          "RN-023",
+          "RN-028"
         ],
         "api": [
           "API-payouts-simulate",
@@ -100,13 +101,13 @@
         {
           "n": 2,
           "quem": "sistema",
-          "faz": "Roda payouts.simulate. Mostra receita, despesas, fundos, sobra distribuível, diária, tabela por cooperado, resíduo de arredondamento.",
+          "faz": "Roda payouts.simulate. Mostra receita, compras de material, despesas, fundos, sobra distribuível, diária, tabela por cooperado (dias, bruto, INSS, vales, líquido), total de INSS retido, resíduo de arredondamento.",
           "api": "API-payouts-simulate"
         },
         {
           "n": 3,
           "quem": "gestor",
-          "faz": "Confere. Se faltou venda, despesa, presença ou vale, lança e volta ao passo 2.",
+          "faz": "Confere. Se faltou venda, compra, despesa, presença ou vale, lança e volta ao passo 2.",
           "telas": [
             "UI-vendas",
             "UI-financeiro",
@@ -128,7 +129,7 @@
         {
           "n": 6,
           "quem": "gestor",
-          "faz": "Exporta demonstrativo (PDF/CSV), faz os PIX, marca cada cooperado como pago.",
+          "faz": "Exporta demonstrativo (PDF/CSV) e o relatório 'INSS do mês' para o contador, faz os PIX, marca cada cooperado como pago.",
           "api": "API-payouts-markPaid"
         },
         {
@@ -227,18 +228,21 @@
         "regras": [
           "RN-011",
           "RN-015",
-          "RN-016"
+          "RN-016",
+          "RN-030"
         ],
         "validacoes": [
           "VL-002",
           "VL-003",
           "VL-006",
-          "VL-009"
+          "VL-009",
+          "VL-017"
         ],
         "api": [
           "API-sales-create",
           "API-buyers-list",
-          "API-materialTypes-list"
+          "API-materialTypes-list",
+          "API-materialTypes-lastPrice"
         ],
         "telas": [
           "UI-vendas"
@@ -256,7 +260,7 @@
         {
           "n": 2,
           "quem": "operador",
-          "faz": "Adiciona itens: material, peso, preço/kg. Vê subtotal e total ao vivo (cálculo local só para exibição)."
+          "faz": "Adiciona itens: material, estado (solto/prensado; vem preenchido com o padrão do material), peso, preço/kg. Se houver último preço praticado com esse comprador para material + estado, aparece como sugestão. Vê subtotal e total ao vivo (cálculo local só para exibição)."
         },
         {
           "n": 3,
@@ -384,7 +388,7 @@
     },
     {
       "id": "FL-006",
-      "nome": "Cadastro e desligamento de cooperado",
+      "nome": "Cadastro, desligamento, reativação e exclusão de cooperado",
       "ator": "gestor",
       "status": "proposto",
       "origem": {
@@ -397,7 +401,8 @@
           "EN-usuario"
         ],
         "regras": [
-          "RN-007"
+          "RN-007",
+          "RN-029"
         ],
         "validacoes": [
           "VL-001",
@@ -411,7 +416,9 @@
         "api": [
           "API-members-create",
           "API-members-update",
-          "API-members-deactivate"
+          "API-members-deactivate",
+          "API-members-reactivate",
+          "API-members-delete"
         ],
         "telas": [
           "UI-cooperados"
@@ -421,7 +428,7 @@
         {
           "n": 1,
           "quem": "gestor",
-          "faz": "Cadastra nome, CPF, PIX, telefone, admissão."
+          "faz": "Cadastra nome, CPF, PIX, telefone, admissão, e se contribui INSS pelo sistema (padrão sim)."
         },
         {
           "n": 2,
@@ -437,9 +444,108 @@
           "n": 4,
           "quem": "gestor",
           "faz": "Desligamento: informa left_on. Cooperado sai da chamada a partir dessa data. Histórico preservado."
+        },
+        {
+          "n": 5,
+          "quem": "gestor",
+          "faz": "Reativação: limpa left_on. Cooperado volta à chamada a partir de hoje. Auditado.",
+          "api": "API-members-reactivate"
+        },
+        {
+          "n": 6,
+          "quem": "gestor",
+          "faz": "Exclusão real: só se o cooperado não tem presença, vale nem fechamento. Senão o sistema recusa (ERR-MEMBER-004) e a tela oferece 'Desligar'.",
+          "api": "API-members-delete"
         }
       ],
-      "descricao": "Gestor cadastra o cooperado com CPF único, opcionalmente cria acesso, e no desligamento informa a data em vez de apagar."
+      "descricao": "Gestor cadastra o cooperado com CPF único, opcionalmente cria acesso, e no desligamento informa a data em vez de apagar. Pode reativar. Só remove de verdade quem não tem nenhum lançamento."
+    },
+    {
+      "id": "FL-008",
+      "nome": "Registro de compra de material",
+      "ator": "operador",
+      "descricao": "Catador avulso, outra cooperativa ou gerador traz material; cada tipo é pesado e registrado com preço por kg combinado. Normalmente é pago na hora (dinheiro ou PIX). A compra é custo do mês e reduz a sobra (RN-003).",
+      "status": "proposto",
+      "origem": {
+        "tipo": "decisao",
+        "ref": "DEC-008 (2026-09-14), pedido do cliente Jailson"
+      },
+      "refs": {
+        "entidades": [
+          "EN-compra",
+          "EN-item-compra",
+          "EN-fornecedor",
+          "EN-tipo-material"
+        ],
+        "regras": [
+          "RN-003",
+          "RN-011",
+          "RN-015",
+          "RN-016",
+          "RN-022",
+          "RN-030"
+        ],
+        "validacoes": [
+          "VL-002",
+          "VL-003",
+          "VL-006",
+          "VL-014",
+          "VL-015",
+          "VL-017"
+        ],
+        "api": [
+          "API-purchases-create",
+          "API-purchases-receipt",
+          "API-suppliers-list",
+          "API-suppliers-create",
+          "API-materialTypes-list",
+          "API-materialTypes-lastPrice"
+        ],
+        "telas": [
+          "UI-vendas"
+        ],
+        "testes": [
+          "TS-020"
+        ],
+        "decisoes": [
+          "DEC-008"
+        ]
+      },
+      "passos": [
+        {
+          "n": 1,
+          "quem": "operador",
+          "faz": "Na seção Compras da tela de vendas, escolhe fornecedor (ou cadastra novo inline: pessoa física com CPF opcional e PIX, ou empresa com CNPJ) e data."
+        },
+        {
+          "n": 2,
+          "quem": "operador",
+          "faz": "Adiciona itens: material (mesmo catálogo das vendas), estado (solto/prensado), peso, preço/kg. Sugestão do último preço com esse fornecedor. Total ao vivo."
+        },
+        {
+          "n": 3,
+          "quem": "operador",
+          "faz": "Informa forma de pagamento (dinheiro ou PIX) e se já foi pago. Finaliza compra."
+        },
+        {
+          "n": 4,
+          "quem": "sistema",
+          "faz": "Recalcula totais, checa mês aberto, grava compra + itens em transação, audita.",
+          "api": "API-purchases-create"
+        },
+        {
+          "n": 5,
+          "quem": "operador",
+          "faz": "Opcional: imprime recibo em PDF para o fornecedor assinar.",
+          "api": "API-purchases-receipt"
+        },
+        {
+          "n": 6,
+          "quem": "gestor",
+          "faz": "Pode excluir (soft) enquanto o mês estiver aberto.",
+          "api": "API-purchases-delete"
+        }
+      ]
     },
     {
       "id": "FL-007",

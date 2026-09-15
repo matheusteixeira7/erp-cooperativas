@@ -1,5 +1,5 @@
 {
-  "descricao": "Cenários com dados de entrada e resultado esperado. O validador (validar.py) recalcula tudo pelas regras RN-001..RN-012 e falha se um número não bater. Os mesmos arquivos alimentam packages/domain/src/payout/calculate.test.ts.",
+  "descricao": "Cenários com dados de entrada e resultado esperado. O validador (validar.py) recalcula tudo pelas regras RN-001..RN-012 e RN-028 e falha se um número não bater. Os mesmos arquivos alimentam packages/domain/src/payout/calculate.test.ts. settings.inssRate = 0 desliga o INSS (fixtures anteriores ao REQ-01 mantêm os números originais); purchases pode ser omitido (= nenhuma compra). member.inssWithheld omitido = true.",
   "nota_pdf": "O pdf (p.8) mostrava 7 cooperados somando 144 dias, mas dizia 'total 220 diárias' e diária 164,55. Os números não fechavam. Aqui fecham.",
   "fixtures": [
     {
@@ -11,7 +11,8 @@
         "fatesRate": 0.05,
         "otherFundsRate": 0,
         "negativeBalancePolicy": "carry_over",
-        "includeMembersLeftInPeriod": true
+        "includeMembersLeftInPeriod": true,
+        "inssRate": 0
       },
       "members": [
         {
@@ -97,12 +98,14 @@
             {
               "material": "PET Cristal",
               "weightKg": 3200,
-              "pricePerKg": 3.2
+              "pricePerKg": 3.2,
+              "condition": "baled"
             },
             {
               "material": "Papelão Ondulado",
               "weightKg": 12600,
-              "pricePerKg": 0.65
+              "pricePerKg": 0.65,
+              "condition": "baled"
             }
           ]
         },
@@ -113,12 +116,14 @@
             {
               "material": "Alumínio (lata)",
               "weightKg": 2500,
-              "pricePerKg": 6.4
+              "pricePerKg": 6.4,
+              "condition": "baled"
             },
             {
               "material": "PEAD (plástico duro)",
               "weightKg": 2000,
-              "pricePerKg": 2.0
+              "pricePerKg": 2.0,
+              "condition": "baled"
             }
           ]
         },
@@ -129,7 +134,8 @@
             {
               "material": "PET Colorido",
               "weightKg": 4028,
-              "pricePerKg": 2.5
+              "pricePerKg": 2.5,
+              "condition": "baled"
             }
           ]
         }
@@ -234,6 +240,181 @@
         "totalNet": 29649.92,
         "totalDeductions": 1120.0,
         "newCarryOverAdvances": []
+      },
+      "purchases": [],
+      "nota": "INSS zerado nesta fixture para preservar os números históricos; o cenário com INSS é FX-ago-2026-com-inss."
+    },
+    {
+      "id": "FX-ago-2026-com-inss",
+      "nome": "Agosto/2026 com fundos e INSS 7,5% (cenário padrão após REQ-01)",
+      "period": "2026-08",
+      "herda_de": "FX-ago-2026-com-fundos",
+      "settings": {
+        "legalReserveRate": 0.1,
+        "fatesRate": 0.05,
+        "otherFundsRate": 0,
+        "inssRate": 0.075,
+        "negativeBalancePolicy": "carry_over",
+        "includeMembersLeftInPeriod": true
+      },
+      "members": [
+        {
+          "id": "m1",
+          "name": "Ana Maria Silva",
+          "workedDays": 22,
+          "advances": [
+            {
+              "amount": 200.0,
+              "grantedOn": "2026-08-05",
+              "description": "Vale mercado"
+            }
+          ]
+        },
+        {
+          "id": "m2",
+          "name": "Carlos Eduardo Santos",
+          "workedDays": 20,
+          "advances": [
+            {
+              "amount": 150.0,
+              "grantedOn": "2026-08-12"
+            }
+          ]
+        },
+        {
+          "id": "m3",
+          "name": "João Pedro Oliveira",
+          "workedDays": 18,
+          "advances": [
+            {
+              "amount": 300.0,
+              "grantedOn": "2026-08-12",
+              "description": "Adiantamento emergencial"
+            }
+          ]
+        },
+        {
+          "id": "m4",
+          "name": "Maria Aparecida Costa",
+          "workedDays": 22,
+          "advances": [
+            {
+              "amount": 100.0,
+              "grantedOn": "2026-08-20"
+            }
+          ]
+        },
+        {
+          "id": "m5",
+          "name": "Roberto Souza",
+          "workedDays": 21,
+          "advances": [
+            {
+              "amount": 250.0,
+              "grantedOn": "2026-08-01"
+            }
+          ]
+        },
+        {
+          "id": "m6",
+          "name": "Fernanda Lima",
+          "workedDays": 22,
+          "advances": [],
+          "inssWithheld": false,
+          "nota": "Aposentada: recolhe por fora."
+        },
+        {
+          "id": "m7",
+          "name": "Gabriel Martins",
+          "workedDays": 19,
+          "advances": [
+            {
+              "amount": 120.0,
+              "grantedOn": "2026-08-15"
+            }
+          ]
+        }
+      ],
+      "nota": "Mesmas vendas, despesas e dias da fixture pai. Só muda o INSS: retido antes dos vales; Fernanda (m6) está marcada como não contribuinte.",
+      "espera": {
+        "grossRevenue": 48500.0,
+        "totalPurchases": 0.0,
+        "totalExpenses": 12300.0,
+        "surplus": 36200.0,
+        "distributableSurplus": 30770.0,
+        "totalWorkedDays": 144,
+        "dayValue": 213.68,
+        "distributedTotal": 30769.92,
+        "roundingResidual": 0.08,
+        "items": [
+          {
+            "member": "m1",
+            "workedDays": 22,
+            "grossAmount": 4700.96,
+            "inssAmount": 352.57,
+            "deductionsAmount": 200.0,
+            "netAmount": 4148.39,
+            "carryOverDebt": 0.0
+          },
+          {
+            "member": "m2",
+            "workedDays": 20,
+            "grossAmount": 4273.6,
+            "inssAmount": 320.52,
+            "deductionsAmount": 150.0,
+            "netAmount": 3803.08,
+            "carryOverDebt": 0.0
+          },
+          {
+            "member": "m3",
+            "workedDays": 18,
+            "grossAmount": 3846.24,
+            "inssAmount": 288.47,
+            "deductionsAmount": 300.0,
+            "netAmount": 3257.77,
+            "carryOverDebt": 0.0
+          },
+          {
+            "member": "m4",
+            "workedDays": 22,
+            "grossAmount": 4700.96,
+            "inssAmount": 352.57,
+            "deductionsAmount": 100.0,
+            "netAmount": 4248.39,
+            "carryOverDebt": 0.0
+          },
+          {
+            "member": "m5",
+            "workedDays": 21,
+            "grossAmount": 4487.28,
+            "inssAmount": 336.55,
+            "deductionsAmount": 250.0,
+            "netAmount": 3900.73,
+            "carryOverDebt": 0.0
+          },
+          {
+            "member": "m6",
+            "workedDays": 22,
+            "grossAmount": 4700.96,
+            "inssAmount": 0.0,
+            "deductionsAmount": 0.0,
+            "netAmount": 4700.96,
+            "carryOverDebt": 0.0
+          },
+          {
+            "member": "m7",
+            "workedDays": 19,
+            "grossAmount": 4059.92,
+            "inssAmount": 304.49,
+            "deductionsAmount": 120.0,
+            "netAmount": 3635.43,
+            "carryOverDebt": 0.0
+          }
+        ],
+        "inssTotal": 1955.17,
+        "totalNet": 27694.75,
+        "totalDeductions": 1120.0,
+        "newCarryOverAdvances": []
       }
     },
     {
@@ -245,7 +426,8 @@
         "fatesRate": 0,
         "otherFundsRate": 0,
         "negativeBalancePolicy": "carry_over",
-        "includeMembersLeftInPeriod": true
+        "includeMembersLeftInPeriod": true,
+        "inssRate": 0
       },
       "nota": "Percentuais zero violam VL-013 na UI; esta fixture existe só para testar o cálculo puro.",
       "herda_de": "FX-ago-2026-com-fundos",
@@ -330,7 +512,8 @@
         "fatesRate": 0.05,
         "otherFundsRate": 0,
         "negativeBalancePolicy": "carry_over",
-        "includeMembersLeftInPeriod": true
+        "includeMembersLeftInPeriod": true,
+        "inssRate": 0
       },
       "members": [
         {
@@ -359,7 +542,8 @@
             {
               "material": "Papelão Ondulado",
               "weightKg": 3000,
-              "pricePerKg": 1.0
+              "pricePerKg": 1.0,
+              "condition": "baled"
             }
           ]
         }
@@ -424,7 +608,8 @@
         "fatesRate": 0.05,
         "otherFundsRate": 0,
         "negativeBalancePolicy": "forgive",
-        "includeMembersLeftInPeriod": true
+        "includeMembersLeftInPeriod": true,
+        "inssRate": 0
       },
       "espera": {
         "dayValue": 193.18,
@@ -458,7 +643,8 @@
         "fatesRate": 0.05,
         "otherFundsRate": 0,
         "negativeBalancePolicy": "carry_over",
-        "includeMembersLeftInPeriod": true
+        "includeMembersLeftInPeriod": true,
+        "inssRate": 0
       },
       "members": [
         {
@@ -476,7 +662,8 @@
             {
               "material": "Vidro",
               "weightKg": 1000,
-              "pricePerKg": 1.0
+              "pricePerKg": 1.0,
+              "condition": "loose"
             }
           ]
         }
@@ -504,7 +691,8 @@
         "fatesRate": 0.05,
         "otherFundsRate": 0,
         "negativeBalancePolicy": "carry_over",
-        "includeMembersLeftInPeriod": true
+        "includeMembersLeftInPeriod": true,
+        "inssRate": 0
       },
       "members": [
         {
@@ -522,7 +710,8 @@
             {
               "material": "Vidro",
               "weightKg": 5000,
-              "pricePerKg": 1.0
+              "pricePerKg": 1.0,
+              "condition": "loose"
             }
           ]
         }
@@ -535,6 +724,141 @@
         "totalWorkedDays": 0,
         "erro": "ERR-PAYOUT-002"
       }
+    },
+    {
+      "id": "FX-out-2026-compras-inss",
+      "nome": "Outubro/2026: compras de material reduzem a sobra; INSS antes dos vales; saldo devedor sobre bruto − INSS",
+      "period": "2026-10",
+      "settings": {
+        "legalReserveRate": 0.1,
+        "fatesRate": 0.05,
+        "otherFundsRate": 0,
+        "inssRate": 0.075,
+        "negativeBalancePolicy": "carry_over",
+        "includeMembersLeftInPeriod": true
+      },
+      "members": [
+        {
+          "id": "p1",
+          "name": "Paulo Prensa",
+          "workedDays": 20,
+          "advances": []
+        },
+        {
+          "id": "p2",
+          "name": "Rita Reciclo",
+          "workedDays": 2,
+          "advances": [
+            {
+              "amount": 700.0,
+              "grantedOn": "2026-10-06",
+              "description": "Adiantamento"
+            }
+          ]
+        }
+      ],
+      "sales": [
+        {
+          "soldOn": "2026-10-20",
+          "buyer": "Reciclagem Indústria X",
+          "items": [
+            {
+              "material": "Papelão Ondulado",
+              "condition": "baled",
+              "weightKg": 10000,
+              "pricePerKg": 0.8
+            },
+            {
+              "material": "PET Cristal",
+              "condition": "baled",
+              "weightKg": 1000,
+              "pricePerKg": 3.0
+            }
+          ]
+        }
+      ],
+      "purchases": [
+        {
+          "purchasedOn": "2026-10-03",
+          "supplier": "Seu Zé (catador avulso)",
+          "paymentMethod": "cash",
+          "items": [
+            {
+              "material": "Papelão Ondulado",
+              "condition": "loose",
+              "weightKg": 2000,
+              "pricePerKg": 0.3
+            }
+          ]
+        },
+        {
+          "purchasedOn": "2026-10-15",
+          "supplier": "Cooperativa Vizinha",
+          "paymentMethod": "pix",
+          "items": [
+            {
+              "material": "PET Cristal",
+              "condition": "loose",
+              "weightKg": 500,
+              "pricePerKg": 1.8
+            }
+          ]
+        }
+      ],
+      "expenses": [
+        {
+          "incurredOn": "2026-10-10",
+          "description": "Energia elétrica",
+          "amount": 1000.0
+        }
+      ],
+      "espera": {
+        "grossRevenue": 11000.0,
+        "totalPurchases": 1500.0,
+        "totalExpenses": 1000.0,
+        "surplus": 8500.0,
+        "legalReserveAmount": 850.0,
+        "fatesAmount": 425.0,
+        "otherFundsAmount": 0.0,
+        "distributableSurplus": 7225.0,
+        "totalWorkedDays": 22,
+        "dayValue": 328.4,
+        "distributedTotal": 7224.8,
+        "roundingResidual": 0.2,
+        "items": [
+          {
+            "member": "p1",
+            "workedDays": 20,
+            "grossAmount": 6568.0,
+            "inssAmount": 492.6,
+            "deductionsAmount": 0.0,
+            "netAmount": 6075.4,
+            "carryOverDebt": 0.0
+          },
+          {
+            "member": "p2",
+            "workedDays": 2,
+            "grossAmount": 656.8,
+            "inssAmount": 49.26,
+            "deductionsAmount": 700.0,
+            "netAmount": 0.0,
+            "carryOverDebt": 92.46
+          }
+        ],
+        "inssTotal": 541.86,
+        "totalNet": 6075.4,
+        "totalDeductions": 700.0,
+        "newCarryOverAdvances": [
+          {
+            "member": "p2",
+            "kind": "carry_over",
+            "amount": 92.46,
+            "grantedOn": "2026-11-01",
+            "status": "pending"
+          }
+        ]
+      },
+      "nota": "Sem INSS o saldo devedor de Rita seria 43,20 (700 − 656,80). Com INSS retido antes, é 92,46 (700 − 607,54)."
     }
   ]
 }

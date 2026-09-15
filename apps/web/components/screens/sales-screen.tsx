@@ -26,23 +26,25 @@ import {
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@workspace/ui/components/empty"
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@workspace/ui/components/field"
 import { Input } from "@workspace/ui/components/input"
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@workspace/ui/components/select"
 import { Spinner } from "@workspace/ui/components/spinner"
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@workspace/ui/components/table"
 import { toast } from "@workspace/ui/components/toast"
+import { ToggleGroup, ToggleGroupItem } from "@workspace/ui/components/toggle-group"
 
 import { ClosedMonthAlert } from "@/components/closed-month-alert"
 import { ConfirmDialog } from "@/components/confirm-dialog"
+import { MaterialSelect } from "@/components/material-select"
 import { PageHeader } from "@/components/page-header"
+import { PurchasesSection } from "@/components/screens/purchases-section"
 import { PeriodSelect } from "@/components/period-select"
 import { TableSkeleton } from "@/components/table-skeleton"
 import { currentPeriod, isInPeriod, periodOf, todayIso } from "@/lib/dates"
 import { errorMessage } from "@/lib/demo/errors"
 import { useRequiredSession } from "@/lib/demo/session"
-import { closedPayoutFor, useDemo, useSimulatedLoading, type SaleDraftItem } from "@/lib/demo/store"
-import { MATERIAL_CATEGORY_LABEL, type Buyer, type MaterialCategory, type Sale } from "@/lib/demo/types"
+import { closedPayoutFor, lastPricePerKg, useDemo, useSimulatedLoading, type SaleDraftItem } from "@/lib/demo/store"
+import { MATERIAL_CONDITION_LABEL, type Buyer, type MaterialCondition, type Sale } from "@/lib/demo/types"
 import { itemSubtotal } from "@/lib/domain/payout"
-import { formatDate, formatMoney, formatPricePerKg, formatWeight, parseDecimal } from "@/lib/format"
+import { formatDate, formatMoney, formatPricePerKg, formatShortDate, formatWeight, parseDecimal } from "@/lib/format"
 import { useActor } from "@/lib/use-actor"
 
 type DraftItem = SaleDraftItem & { key: string; subtotal: number }
@@ -69,6 +71,7 @@ export function SalesScreen() {
   const [soldOn, setSoldOn] = React.useState(today)
   const [invoiceNumber, setInvoiceNumber] = React.useState("")
   const [materialTypeId, setMaterialTypeId] = React.useState<string | null>(null)
+  const [condition, setCondition] = React.useState<MaterialCondition>("baled")
   const [weight, setWeight] = React.useState("")
   const [price, setPrice] = React.useState("")
   const [items, setItems] = React.useState<DraftItem[]>([])
@@ -83,9 +86,10 @@ export function SalesScreen() {
   const listClosed = closedPayoutFor(data, period)
   const activeBuyers = data.buyers.filter((b) => b.active)
   const activeMaterials = data.materialTypes.filter((m) => m.active)
-  const materialItems = activeMaterials.map((m) => ({ value: m.id, label: m.name }))
   const materialName = (id: string) => data.materialTypes.find((m) => m.id === id)?.name ?? "—"
   const buyerName = (id: string) => data.buyers.find((b) => b.id === id)?.name ?? "—"
+  const conditionLabel = (value: MaterialCondition) => MATERIAL_CONDITION_LABEL[value].toLowerCase()
+  const priceSuggestion = buyer && materialTypeId ? lastPricePerKg(data, { materialTypeId, condition, buyerId: buyer.id }) : null
 
   const totalWeight = items.reduce((sum, i) => sum + i.weightKg, 0)
   const totalAmount = items.reduce((sum, i) => sum + i.subtotal, 0)
@@ -101,7 +105,7 @@ export function SalesScreen() {
     if (Object.keys(errors).length > 0 || !materialTypeId || weightKg === null || pricePerKg === null) return
     setItems((prev) => [
       ...prev,
-      { key: `${Date.now()}-${prev.length}`, materialTypeId, weightKg, pricePerKg, subtotal: itemSubtotal(weightKg, pricePerKg) },
+      { key: `${Date.now()}-${prev.length}`, materialTypeId, condition, weightKg, pricePerKg, subtotal: itemSubtotal(weightKg, pricePerKg) },
     ])
     setWeight("")
     setPrice("")
@@ -133,7 +137,13 @@ export function SalesScreen() {
     setSaving(true)
     try {
       const sale = await actions.createSale(
-        { buyerId: buyer.id, soldOn, items: items.map(({ materialTypeId, weightKg, pricePerKg }) => ({ materialTypeId, weightKg, pricePerKg })), invoiceNumber, note: "" },
+        {
+          buyerId: buyer.id,
+          soldOn,
+          items: items.map(({ materialTypeId, condition, weightKg, pricePerKg }) => ({ materialTypeId, condition, weightKg, pricePerKg })),
+          invoiceNumber,
+          note: "",
+        },
         actor,
       )
       toast.add({
@@ -165,7 +175,7 @@ export function SalesScreen() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Vendas" description="Registre a saída de material pesado para o comprador." />
+      <PageHeader title="Vendas e compras" description="Em cima, a saída de material para o comprador. Embaixo, o material comprado de catadores e outras cooperativas." />
 
       <Card>
         <CardHeader>
@@ -225,39 +235,44 @@ export function SalesScreen() {
           <div className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-3">
             <p className="text-sm font-medium">Adicionar material</p>
             <FieldGroup>
-              <div className="grid gap-3 md:grid-cols-[2fr_1fr_1fr_auto] md:items-start">
+              <div className="grid gap-3 md:grid-cols-[2fr_auto_1fr_1fr_auto] md:items-start">
                 <Field data-invalid={itemErrors.material ? true : undefined}>
                   <FieldLabel htmlFor="sale-material">Material</FieldLabel>
-                  <Select
-                    items={materialItems}
+                  <MaterialSelect
+                    id="sale-material"
+                    materials={activeMaterials}
                     value={materialTypeId}
                     onValueChange={(value) => {
                       setMaterialTypeId(value)
+                      const chosen = value ? data.materialTypes.find((m) => m.id === value) : undefined
+                      if (chosen) setCondition(chosen.defaultCondition)
                       setItemErrors((e) => ({ ...e, material: undefined }))
                     }}
                     disabled={disabledForm}
-                  >
-                    <SelectTrigger id="sale-material" className="w-full" aria-invalid={itemErrors.material ? true : undefined}>
-                      <SelectValue placeholder="Escolha o material" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(Object.keys(MATERIAL_CATEGORY_LABEL) as MaterialCategory[])
-                        .filter((category) => activeMaterials.some((m) => m.category === category))
-                        .map((category) => (
-                          <SelectGroup key={category}>
-                            <SelectLabel>{MATERIAL_CATEGORY_LABEL[category]}</SelectLabel>
-                            {activeMaterials
-                              .filter((m) => m.category === category)
-                              .map((m) => (
-                                <SelectItem key={m.id} value={m.id}>
-                                  {m.name}
-                                </SelectItem>
-                              ))}
-                          </SelectGroup>
-                        ))}
-                    </SelectContent>
-                  </Select>
+                    invalid={Boolean(itemErrors.material)}
+                  />
                   <FieldError>{itemErrors.material}</FieldError>
+                </Field>
+                <Field>
+                  <FieldLabel id="sale-condition-label">Estado</FieldLabel>
+                  <ToggleGroup
+                    value={[condition]}
+                    onValueChange={(value) => {
+                      const next = value[0] as MaterialCondition | undefined
+                      if (next) setCondition(next)
+                    }}
+                    variant="outline"
+                    spacing={0}
+                    aria-labelledby="sale-condition-label"
+                    disabled={disabledForm}
+                  >
+                    <ToggleGroupItem value="loose" className="min-w-24">
+                      {MATERIAL_CONDITION_LABEL.loose}
+                    </ToggleGroupItem>
+                    <ToggleGroupItem value="baled" className="min-w-24">
+                      {MATERIAL_CONDITION_LABEL.baled}
+                    </ToggleGroupItem>
+                  </ToggleGroup>
                 </Field>
                 <Field data-invalid={itemErrors.weight ? true : undefined}>
                   <FieldLabel htmlFor="sale-weight">Peso (kg)</FieldLabel>
@@ -284,7 +299,7 @@ export function SalesScreen() {
                     inputMode="decimal"
                     step="0.0001"
                     min="0.0001"
-                    placeholder="0,0000"
+                    placeholder={priceSuggestion ? String(priceSuggestion.pricePerKg) : "0,0000"}
                     value={price}
                     onChange={(e) => setPrice(e.target.value)}
                     onKeyDown={(e) => {
@@ -305,7 +320,19 @@ export function SalesScreen() {
                   </Button>
                 </Field>
               </div>
-              <FieldDescription>Pressione Enter no preço para adicionar rapidamente.</FieldDescription>
+              <FieldDescription>
+                {priceSuggestion ? (
+                  <>
+                    Último preço com {buyer?.name} para {materialName(materialTypeId ?? "")} {conditionLabel(condition)}:{" "}
+                    <button type="button" className="font-medium underline underline-offset-4" onClick={() => setPrice(String(priceSuggestion.pricePerKg))} disabled={disabledForm}>
+                      {formatPricePerKg(priceSuggestion.pricePerKg)}
+                    </button>{" "}
+                    em {formatShortDate(priceSuggestion.on)}. Só sugestão.
+                  </>
+                ) : (
+                  "Pressione Enter no preço para adicionar rapidamente."
+                )}
+              </FieldDescription>
             </FieldGroup>
           </div>
 
@@ -329,7 +356,12 @@ export function SalesScreen() {
               ) : (
                 items.map((item) => (
                   <TableRow key={item.key}>
-                    <TableCell className="font-medium">{materialName(item.materialTypeId)}</TableCell>
+                    <TableCell className="font-medium">
+                      <span className="flex flex-wrap items-center gap-1.5">
+                        {materialName(item.materialTypeId)}
+                        <Badge variant="outline">{conditionLabel(item.condition)}</Badge>
+                      </span>
+                    </TableCell>
                     <TableCell className="text-right tabular-nums">{formatWeight(item.weightKg)}</TableCell>
                     <TableCell className="text-right tabular-nums">{formatPricePerKg(item.pricePerKg)}</TableCell>
                     <TableCell className="text-right tabular-nums">{formatMoney(item.subtotal)}</TableCell>
@@ -434,7 +466,7 @@ export function SalesScreen() {
                       <span className="flex flex-wrap gap-1">
                         {sale.items.map((item) => (
                           <Badge key={item.id} variant="secondary">
-                            {materialName(item.materialTypeId)}
+                            {materialName(item.materialTypeId)} · {conditionLabel(item.condition)}
                           </Badge>
                         ))}
                       </span>
@@ -471,6 +503,14 @@ export function SalesScreen() {
         </CardContent>
       </Card>
 
+      <div className="flex items-center gap-3 pt-2">
+        <div className="h-px flex-1 bg-border" />
+        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Compras</span>
+        <div className="h-px flex-1 bg-border" />
+      </div>
+
+      <PurchasesSection />
+
       <NewBuyerDialog
         open={newBuyerOpen}
         onOpenChange={setNewBuyerOpen}
@@ -503,7 +543,12 @@ export function SalesScreen() {
                 <TableBody>
                   {viewing.items.map((item) => (
                     <TableRow key={item.id}>
-                      <TableCell>{materialName(item.materialTypeId)}</TableCell>
+                      <TableCell>
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          {materialName(item.materialTypeId)}
+                          <Badge variant="outline">{conditionLabel(item.condition)}</Badge>
+                        </span>
+                      </TableCell>
                       <TableCell className="text-right tabular-nums">{formatWeight(item.weightKg)}</TableCell>
                       <TableCell className="text-right tabular-nums">{formatPricePerKg(item.pricePerKg)}</TableCell>
                       <TableCell className="text-right tabular-nums">{formatMoney(item.subtotal)}</TableCell>

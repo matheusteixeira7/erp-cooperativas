@@ -31,6 +31,8 @@ export type Member = {
   phone: string
   admittedOn: string
   leftOn: string | null
+  /** Contribui INSS pelo sistema (RN-028). false para aposentado, MEI ou quem recolhe por fora. */
+  inssWithheld: boolean
   notes: string
   hasAccess: boolean
 }
@@ -45,16 +47,40 @@ export type Buyer = {
 
 export type MaterialCategory = "plastic" | "paper" | "metal" | "glass" | "waste" | "other"
 
+/** Fornecedor de material (EN-fornecedor): catador avulso ou empresa/cooperativa. */
+export type SupplierKind = "individual" | "company"
+
+export type Supplier = {
+  id: string
+  kind: SupplierKind
+  name: string
+  /** Só para kind = individual; opcional. 11 dígitos. */
+  cpf: string
+  /** Obrigatório para kind = company. 14 dígitos. */
+  cnpj: string
+  pixKey: string
+  phone: string
+  active: boolean
+}
+
+export type PaymentMethod = "cash" | "pix"
+
+/** Estado do material na pesagem (TP-EstadoMaterial, RN-030). */
+export type MaterialCondition = "loose" | "baled"
+
 export type MaterialType = {
   id: string
   name: string
   category: MaterialCategory
+  /** Pré-seleção do estado na UI. Mudar aqui não altera itens antigos (RN-030). */
+  defaultCondition: MaterialCondition
   active: boolean
 }
 
 export type SaleItem = {
   id: string
   materialTypeId: string
+  condition: MaterialCondition
   weightKg: number
   pricePerKg: number
   subtotal: number
@@ -68,6 +94,32 @@ export type Sale = {
   totalAmount: number
   totalWeightKg: number
   invoiceNumber: string
+  note: string
+  deletedAt: string | null
+  createdBy: string
+  createdAt: string
+}
+
+export type PurchaseItem = {
+  id: string
+  materialTypeId: string
+  condition: MaterialCondition
+  weightKg: number
+  pricePerKg: number
+  subtotal: number
+}
+
+/** Compra de material (EN-compra). Custo do mês; reduz a sobra em linha própria (RN-003). */
+export type Purchase = {
+  id: string
+  supplierId: string
+  purchasedOn: string
+  items: PurchaseItem[]
+  totalAmount: number
+  totalWeightKg: number
+  paymentMethod: PaymentMethod
+  /** Nulo = a pagar. Informativo; a competência é purchasedOn. */
+  paidOn: string | null
   note: string
   deletedAt: string | null
   createdBy: string
@@ -129,8 +181,13 @@ export type PayoutItem = {
   payoutId: string
   memberId: string
   memberNameSnapshot: string
+  /** CPF na data do fechamento, para o relatório de INSS (só sai na exportação). */
+  memberCpfSnapshot: string
   workedDays: number
   grossAmount: number
+  inssBase: number
+  inssRate: number
+  inssAmount: number
   deductionsAmount: number
   netAmount: number
   carryOverDebt: number
@@ -142,6 +199,7 @@ export type Payout = {
   period: string
   status: PayoutStatus
   grossRevenue: number
+  totalPurchases: number
   totalExpenses: number
   surplus: number
   legalReserveAmount: number
@@ -152,6 +210,7 @@ export type Payout = {
   dayValue: number
   distributedTotal: number
   roundingResidual: number
+  inssTotal: number
   totalDeductions: number
   totalNet: number
   settingsSnapshot: PayoutSettingsVersion
@@ -169,6 +228,7 @@ export type PayoutSettingsVersion = {
   legalReserveRate: number
   fatesRate: number
   otherFundsRate: number
+  inssRate: number
   negativeBalancePolicy: NegativeBalancePolicy
   includeMembersLeftInPeriod: boolean
   createdBy: string
@@ -179,8 +239,10 @@ export type PayoutSettingsVersion = {
 export type DemoData = {
   members: Member[]
   buyers: Buyer[]
+  suppliers: Supplier[]
   materialTypes: MaterialType[]
   sales: Sale[]
+  purchases: Purchase[]
   expenses: Expense[]
   advances: Advance[]
   attendances: Attendance[]
@@ -192,6 +254,21 @@ export const ROLE_LABEL: Record<Role, string> = {
   manager: "Gestor",
   operator: "Operador",
   member: "Cooperado",
+}
+
+export const MATERIAL_CONDITION_LABEL: Record<MaterialCondition, string> = {
+  loose: "Solto",
+  baled: "Prensado",
+}
+
+export const SUPPLIER_KIND_LABEL: Record<SupplierKind, string> = {
+  individual: "Pessoa física",
+  company: "Empresa / cooperativa",
+}
+
+export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
+  cash: "Dinheiro",
+  pix: "PIX",
 }
 
 export const MATERIAL_CATEGORY_LABEL: Record<MaterialCategory, string> = {

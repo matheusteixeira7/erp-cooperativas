@@ -1,0 +1,22 @@
+{
+  "id": "EN-compra", "nome": "Compra de material", "tabela": "purchases", "tipo_ts": "Purchase",
+  "descricao": "Cabeçalho de uma entrada de material comprado de um fornecedor. Espelho da venda. É custo do mês: entra na sobra como linha própria, separada das despesas operacionais (RN-003). Na v1 é só o registro financeiro; controle de estoque (o que entrou, o que virou fardo) fica para a fase 2.",
+  "status": "proposto", "origem": { "tipo": "decisao", "ref": "DEC-008 (2026-09-14), pedido do cliente Jailson" },
+  "refs": { "tipos": ["TP-DinheiroBRL", "TP-PesoKg", "TP-DataLocal", "TP-FormaPagamento"], "entidades": ["EN-cooperativa", "EN-fornecedor", "EN-item-compra", "EN-fechamento"], "regras": ["RN-003", "RN-011", "RN-015", "RN-016", "RN-022"], "validacoes": ["VL-006", "VL-014"], "api": ["API-purchases-create", "API-purchases-list", "API-purchases-delete", "API-purchases-receipt"], "telas": ["UI-vendas", "UI-fechamento"], "fluxos": ["FL-008"], "testes": ["TS-020"], "fixtures": ["FX-out-2026-compras-inss"], "decisoes": ["DEC-008"] },
+  "campos": [
+    { "nome": "id", "tipo": "TP-Id", "pk": true },
+    { "nome": "cooperative_id", "tipo": "TP-Id", "fk": "EN-cooperativa", "obrigatorio": true },
+    { "nome": "supplier_id", "tipo": "TP-Id", "fk": "EN-fornecedor", "obrigatorio": true },
+    { "nome": "purchased_on", "tipo": "TP-DataLocal", "obrigatorio": true, "descricao": "Data da compra. Define a competência (RN-003), não a data do pagamento." },
+    { "nome": "total_amount", "tipo": "TP-DinheiroBRL", "obrigatorio": true, "descricao": "Calculado no servidor = soma dos subtotais (RN-015). Nunca aceito do cliente." },
+    { "nome": "total_weight_kg", "tipo": "TP-PesoKg", "descricao": "Calculado. Soma dos pesos." },
+    { "nome": "payment_method", "tipo": "TP-FormaPagamento", "obrigatorio": true, "padrao": "cash" },
+    { "nome": "paid_on", "tipo": "TP-DataLocal", "obrigatorio": false, "descricao": "Quando foi pago. Nulo = a pagar. Compra de catador normalmente é paga na hora (paid_on = purchased_on). Informativo: não muda a competência." },
+    { "nome": "note", "tipo": "text", "obrigatorio": false },
+    { "nome": "deleted_at", "tipo": "TP-Timestamp", "obrigatorio": false, "descricao": "Soft delete (PL-004, RN-022)." },
+    { "nome": "created_by", "tipo": "TP-Id", "fk": "EN-usuario" },
+    { "nome": "created_at", "tipo": "TP-Timestamp" }, { "nome": "updated_at", "tipo": "TP-Timestamp" }
+  ],
+  "indices": ["INDEX (cooperative_id, purchased_on)", "INDEX (cooperative_id, supplier_id)"],
+  "invariantes": ["Tem ≥ 1 item (RN-016).", "total_amount = Σ item.subtotal (RN-015).", "Não entra no rateio se deleted_at não nulo.", "Não se cria nem se altera em mês fechado (RN-011)."]
+}

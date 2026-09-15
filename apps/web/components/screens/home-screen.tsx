@@ -46,9 +46,12 @@ export function HomeScreen() {
   const attendanceDone = todayAttendance.length > 0
 
   const monthSales = data.sales.filter((s) => !s.deletedAt && isInPeriod(s.soldOn, period))
+  const monthPurchases = data.purchases.filter((p) => !p.deletedAt && isInPeriod(p.purchasedOn, period))
   const monthExpenses = data.expenses.filter((e) => !e.deletedAt && isInPeriod(e.incurredOn, period))
   const revenue = monthSales.reduce((sum, s) => sum + s.totalAmount, 0)
+  const purchases = monthPurchases.reduce((sum, p) => sum + p.totalAmount, 0)
   const expenses = monthExpenses.reduce((sum, e) => sum + e.amount, 0)
+  const partialSurplus = revenue - purchases - expenses
   const weight = monthSales.reduce((sum, s) => sum + s.totalWeightKg, 0)
   const pendingAdvances = data.advances.filter((a) => a.status === "pending")
   const pendingTotal = pendingAdvances.reduce((sum, a) => sum + a.amount, 0)
@@ -121,13 +124,18 @@ export function HomeScreen() {
           hint={attendanceDone ? "presentes registrados" : "Nenhuma presença registrada ainda"}
         />
         <StatCard loading={loading} label="Vendas do mês" value={formatMoney(revenue)} hint={`${monthSales.length} venda(s) · ${formatWeight(weight)}`} />
-        <StatCard loading={loading} label="Despesas do mês" value={formatMoney(expenses)} hint={`${monthExpenses.length} lançamento(s)`} />
+        <StatCard
+          loading={loading}
+          label="Compras e despesas do mês"
+          value={formatMoney(purchases + expenses)}
+          hint={`Compras de material ${formatMoney(purchases)} · despesas ${formatMoney(expenses)}`}
+        />
         <StatCard
           loading={loading}
           label="Sobra parcial"
-          value={formatMoney(revenue - expenses)}
+          value={formatMoney(partialSurplus)}
           hint={`${workedDays} diárias até agora · ${pendingAdvances.length} vale(s) pendente(s) somando ${formatMoney(pendingTotal)}`}
-          highlight={revenue - expenses > 0}
+          highlight={partialSurplus > 0}
         />
       </div>
 

@@ -19,7 +19,7 @@ import { currentPeriod, isInPeriod, isoToDate, periodOf } from "@/lib/dates"
 import { useRequiredSession } from "@/lib/demo/session"
 import { useDemo, useSimulatedLoading } from "@/lib/demo/store"
 import { ADVANCE_KIND_LABEL } from "@/lib/demo/types"
-import { formatDate, formatDateTime, formatMoney, formatPeriod, formatPeriodLong } from "@/lib/format"
+import { formatDate, formatDateTime, formatMoney, formatPercent, formatPeriod, formatPeriodLong } from "@/lib/format"
 
 export function StatementScreen() {
   const { data, resetCount } = useDemo()
@@ -82,6 +82,13 @@ export function StatementScreen() {
             <StatCard label="Dias trabalhados" value={item.workedDays} hint={`de ${payout.totalWorkedDays} diárias da cooperativa`} />
             <StatCard label="Valor da diária" value={formatMoney(payout.dayValue)} hint="igual para todos os cooperados" />
             <StatCard label="Bruto" value={formatMoney(item.grossAmount)} hint={`${item.workedDays} dias × ${formatMoney(payout.dayValue)}`} />
+            {(payout.inssTotal > 0 || item.inssAmount > 0) && (
+              <StatCard
+                label="INSS retido"
+                value={item.inssAmount > 0 ? `− ${formatMoney(item.inssAmount)}` : "Sem desconto"}
+                hint={item.inssAmount > 0 ? `${formatPercent(item.inssRate)} sobre o bruto. A cooperativa recolhe para você.` : "Você está marcado como quem recolhe por fora."}
+              />
+            )}
             <StatCard label="Vales descontados" value={item.deductionsAmount > 0 ? `− ${formatMoney(item.deductionsAmount)}` : formatMoney(0)} hint={`${deducted.length} vale(s)`} />
             <StatCard highlight className="sm:col-span-2" label="Líquido a receber" value={formatMoney(item.netAmount)} hint={item.carryOverDebt > 0 ? `Saldo devedor de ${formatMoney(item.carryOverDebt)} passa para o próximo mês.` : `Fechado em ${formatDateTime(payout.closedAt)}.`} />
           </div>

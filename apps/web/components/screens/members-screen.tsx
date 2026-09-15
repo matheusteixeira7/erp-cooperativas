@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { MoreHorizontalIcon, PencilIcon, SearchIcon, UserMinusIcon, UserPlusIcon, UsersIcon } from "lucide-react"
+import { MoreHorizontalIcon, PencilIcon, SearchIcon, Trash2Icon, UserCheckIcon, UserMinusIcon, UserPlusIcon, UsersIcon } from "lucide-react"
 
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
@@ -31,7 +31,7 @@ import { PageHeader } from "@/components/page-header"
 import { TableSkeleton } from "@/components/table-skeleton"
 import { todayIso } from "@/lib/dates"
 import { DemoError, errorMessage } from "@/lib/demo/errors"
-import { useDemo, useSimulatedLoading } from "@/lib/demo/store"
+import { memberHasRecords, useDemo, useSimulatedLoading } from "@/lib/demo/store"
 import type { Member } from "@/lib/demo/types"
 import { formatCpf, formatDate, formatPhone, maskCpf } from "@/lib/format"
 import { isValidCpf, isValidPixKey, onlyDigits } from "@/lib/validation"
@@ -42,13 +42,14 @@ type MemberForm = {
   pixKey: string
   phone: string
   admittedOn: string
+  inssWithheld: boolean
   notes: string
   hasAccess: boolean
 }
 
 type FormErrors = Partial<Record<keyof MemberForm, string>>
 
-const EMPTY_FORM: MemberForm = { name: "", cpf: "", pixKey: "", phone: "", admittedOn: todayIso(), notes: "", hasAccess: false }
+const EMPTY_FORM: MemberForm = { name: "", cpf: "", pixKey: "", phone: "", admittedOn: todayIso(), inssWithheld: true, notes: "", hasAccess: false }
 
 export function MembersScreen() {
   const { data, actions, resetCount } = useDemo()
@@ -56,7 +57,7 @@ export function MembersScreen() {
   const today = todayIso()
 
   const [search, setSearch] = React.useState("")
-  const [filter, setFilter] = React.useState<"active" | "all">("active")
+  const [filter, setFilter] = React.useState<"active" | "left" | "all">("active")
   const [sheetOpen, setSheetOpen] = React.useState(false)
   const [editing, setEditing] = React.useState<Member | null>(null)
   const [form, setForm] = React.useState<MemberForm>(EMPTY_FORM)
@@ -64,17 +65,22 @@ export function MembersScreen() {
   const [saving, setSaving] = React.useState(false)
   const [deactivating, setDeactivating] = React.useState<Member | null>(null)
   const [leftOn, setLeftOn] = React.useState(today)
+  const [reactivating, setReactivating] = React.useState<Member | null>(null)
+  const [deleting, setDeleting] = React.useState<Member | null>(null)
+
+  const isActive = React.useCallback((m: Member) => !m.leftOn || m.leftOn >= today, [today])
 
   const members = React.useMemo(() => {
     const term = search.trim().toLowerCase()
     const digits = onlyDigits(search)
     return data.members
-      .filter((m) => (filter === "active" ? !m.leftOn || m.leftOn >= today : true))
+      .filter((m) => (filter === "active" ? isActive(m) : filter === "left" ? !isActive(m) : true))
       .filter((m) => !term || m.name.toLowerCase().includes(term) || (digits.length >= 3 && m.cpf.includes(digits)))
       .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
-  }, [data.members, filter, search, today])
+  }, [data.members, filter, isActive, search])
 
-  const activeCount = data.members.filter((m) => !m.leftOn || m.leftOn >= today).length
+  const activeCount = data.members.filter(isActive).length
+  const leftCount = data.members.length - activeCount
 
   function openCreate() {
     setEditing(null)
@@ -91,6 +97,7 @@ export function MembersScreen() {
       pixKey: member.pixKey,
       phone: formatPhone(member.phone),
       admittedOn: member.admittedOn,
+      inssWithheld: member.inssWithheld,
       notes: member.notes,
       hasAccess: member.hasAccess,
     })
@@ -120,6 +127,7 @@ export function MembersScreen() {
       pixKey: form.pixKey.trim(),
       phone: onlyDigits(form.phone),
       admittedOn: form.admittedOn,
+      inssWithheld: form.inssWithheld,
       notes: form.notes.trim(),
       hasAccess: form.hasAccess,
     }
@@ -158,6 +166,28 @@ export function MembersScreen() {
     }
   }
 
+  async function handleReactivate() {
+    if (!reactivating) return
+    try {
+      await actions.reactivateMember(reactivating.id)
+      toast.add({ type: "success", title: "Cooperado reativado", description: `${reactivating.name} volta a aparecer na chamada a partir de hoje.` })
+    } catch (error) {
+      toast.add({ type: "error", title: "Não foi possível reativar", description: errorMessage(error) })
+      throw error
+    }
+  }
+
+  async function handleDelete() {
+    if (!deleting) return
+    try {
+      await actions.deleteMember(deleting.id)
+      toast.add({ type: "success", title: "Cadastro excluído", description: `${deleting.name} foi removido. Não havia nenhum lançamento.` })
+    } catch (error) {
+      toast.add({ type: "error", title: "Não foi possível excluir", description: errorMessage(error) })
+      throw error
+    }
+  }
+
   function setField<K extends keyof MemberForm>(key: K, value: MemberForm[K]) {
     setForm((prev) => ({ ...prev, [key]: value }))
     setErrors((prev) => ({ ...prev, [key]: undefined }))
@@ -167,7 +197,7 @@ export function MembersScreen() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Cooperados" description={`${activeCount} ativos. Desligados ficam no histórico e continuam nos fechamentos antigos.`}>
+      <PageHeader title="Cooperados" description={`${activeCount} ativos, ${leftCount} desligado(s). Desligados ficam no histórico e continuam nos fechamentos antigos; só se apaga de verdade quem nunca teve lançamento.`}>
         <Button onClick={openCreate}>
           <UserPlusIcon data-icon="inline-start" />
           Novo cooperado
@@ -186,13 +216,14 @@ export function MembersScreen() {
             <ToggleGroup
               value={[filter]}
               onValueChange={(value) => {
-                const next = value[0] as "active" | "all" | undefined
+                const next = value[0] as "active" | "left" | "all" | undefined
                 if (next) setFilter(next)
               }}
               variant="outline"
               aria-label="Filtro"
             >
               <ToggleGroupItem value="active">Ativos</ToggleGroupItem>
+              <ToggleGroupItem value="left">Desligados</ToggleGroupItem>
               <ToggleGroupItem value="all">Todos</ToggleGroupItem>
             </ToggleGroup>
           </div>
@@ -221,8 +252,10 @@ export function MembersScreen() {
                 <EmptyMedia variant="icon">
                   <SearchIcon />
                 </EmptyMedia>
-                <EmptyTitle>Nenhum resultado</EmptyTitle>
-                <EmptyDescription>Tente outro nome ou CPF, ou mude o filtro para “Todos”.</EmptyDescription>
+                <EmptyTitle>{filter === "left" && !search.trim() ? "Nenhum cooperado desligado" : "Nenhum resultado"}</EmptyTitle>
+                <EmptyDescription>
+                  {filter === "left" && !search.trim() ? "Quem for desligado aparece aqui e pode ser reativado." : "Tente outro nome ou CPF, ou mude o filtro para “Todos”."}
+                </EmptyDescription>
               </EmptyHeader>
             </Empty>
           ) : (
@@ -240,12 +273,16 @@ export function MembersScreen() {
               </TableHeader>
               <TableBody>
                 {members.map((member) => {
-                  const active = !member.leftOn || member.leftOn >= today
+                  const active = isActive(member)
+                  const hasRecords = memberHasRecords(data, member.id)
                   return (
                     <TableRow key={member.id}>
                       <TableCell className="font-medium">
                         <span className="flex flex-col">
-                          <span>{member.name}</span>
+                          <span className="flex flex-wrap items-center gap-1.5">
+                            {member.name}
+                            {!member.inssWithheld && <Badge variant="outline">sem INSS</Badge>}
+                          </span>
                           {member.hasAccess && <span className="text-xs text-muted-foreground">Tem acesso ao extrato</span>}
                         </span>
                       </TableCell>
@@ -268,23 +305,33 @@ export function MembersScreen() {
                                 Editar cadastro
                               </DropdownMenuItem>
                             </DropdownMenuGroup>
-                            {active && (
-                              <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuGroup>
-                                  <DropdownMenuItem
-                                    variant="destructive"
-                                    onClick={() => {
-                                      setLeftOn(today)
-                                      setDeactivating(member)
-                                    }}
-                                  >
-                                    <UserMinusIcon />
-                                    Desligar
-                                  </DropdownMenuItem>
-                                </DropdownMenuGroup>
-                              </>
-                            )}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuGroup>
+                              {active ? (
+                                <DropdownMenuItem
+                                  variant="destructive"
+                                  onClick={() => {
+                                    setLeftOn(today)
+                                    setDeactivating(member)
+                                  }}
+                                >
+                                  <UserMinusIcon />
+                                  Desligar
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem onClick={() => setReactivating(member)}>
+                                  <UserCheckIcon />
+                                  Reativar
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem variant="destructive" disabled={hasRecords} onClick={() => setDeleting(member)}>
+                                <Trash2Icon />
+                                <span className="flex flex-col">
+                                  <span>Excluir de verdade</span>
+                                  {hasRecords && <span className="text-xs font-normal opacity-80">Tem lançamentos: use Desligar</span>}
+                                </span>
+                              </DropdownMenuItem>
+                            </DropdownMenuGroup>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -348,6 +395,13 @@ export function MembersScreen() {
                 </Field>
                 <Field orientation="horizontal">
                   <FieldContent>
+                    <FieldTitle>Contribui INSS pelo sistema</FieldTitle>
+                    <FieldDescription>Desligue para aposentado, MEI ou quem recolhe por fora. Vale a partir do próximo fechamento.</FieldDescription>
+                  </FieldContent>
+                  <Switch checked={form.inssWithheld} onCheckedChange={(checked) => setField("inssWithheld", checked)} aria-label="Contribui INSS pelo sistema" />
+                </Field>
+                <Field orientation="horizontal">
+                  <FieldContent>
                     <FieldTitle>Acesso ao extrato</FieldTitle>
                     <FieldDescription>Cria um usuário com perfil Cooperado para ver dias, diária e líquido pelo celular.</FieldDescription>
                   </FieldContent>
@@ -384,6 +438,25 @@ export function MembersScreen() {
           <FieldError>{deactivating && leftOn < deactivating.admittedOn ? "Não pode ser antes da admissão." : null}</FieldError>
         </Field>
       </ConfirmDialog>
+
+      <ConfirmDialog
+        open={reactivating !== null}
+        onOpenChange={(open) => !open && setReactivating(null)}
+        title={`Reativar ${reactivating?.name ?? ""}?`}
+        description={`Desligado em ${reactivating?.leftOn ? formatDate(reactivating.leftOn) : "—"}. Ao reativar, volta a aparecer na chamada a partir de hoje e entra no rateio dos próximos meses. Os fechamentos antigos não mudam.`}
+        confirmLabel="Reativar cooperado"
+        onConfirm={handleReactivate}
+      />
+
+      <ConfirmDialog
+        open={deleting !== null}
+        onOpenChange={(open) => !open && setDeleting(null)}
+        title={`Excluir ${deleting?.name ?? ""} de verdade?`}
+        description="Só é possível porque este cooperado não tem nenhuma presença, vale ou fechamento. O cadastro é apagado e não pode ser recuperado. Se a pessoa trabalhou algum dia, use “Desligar”."
+        confirmLabel="Excluir cadastro"
+        destructive
+        onConfirm={handleDelete}
+      />
     </div>
   )
 }
