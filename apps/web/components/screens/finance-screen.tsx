@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { ReceiptTextIcon, Trash2Icon, WalletIcon, XCircleIcon } from "lucide-react"
 
 import { Badge } from "@workspace/ui/components/badge"
@@ -21,30 +22,33 @@ import { ClosedMonthAlert } from "@/components/closed-month-alert"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { PageHeader } from "@/components/page-header"
 import { PeriodSelect } from "@/components/period-select"
+import { QueryError } from "@/components/query-error"
 import { TableSkeleton } from "@/components/table-skeleton"
-import { currentPeriod, isInPeriod, periodOf, todayIso } from "@/lib/dates"
-import { errorMessage } from "@/lib/demo/errors"
-import { useRequiredSession } from "@/lib/demo/session"
-import { activeMembersOn, closedPayoutFor, useDemo, useSimulatedLoading } from "@/lib/demo/store"
+import { currentPeriod, periodOf, todayIso } from "@/lib/dates"
 import {
   ADVANCE_KIND_LABEL,
   ADVANCE_STATUS_LABEL,
   EXPENSE_CATEGORY_LABEL,
-  type Advance,
-  type AdvanceKind,
+  expenseCategoryLabel,
   type AdvanceStatus,
-  type Expense,
   type ExpenseCategory,
-} from "@/lib/demo/types"
+} from "@/lib/domain/enums"
 import { formatDate, formatMoney, formatPeriod, parseDecimal } from "@/lib/format"
-import { useActor } from "@/lib/use-actor"
+import { useRequiredSession } from "@/lib/session"
+import { useTRPC, type RouterOutputs } from "@/lib/trpc/client"
+import { errorMessage } from "@/lib/trpc/errors"
+import { useInvalidateAll } from "@/lib/trpc/hooks"
+
+type Expense = RouterOutputs["expenses"]["list"]["items"][number]
+type Advance = RouterOutputs["advances"]["list"]["items"][number]
+type ManualAdvanceKind = "cash_advance" | "purchase" | "other"
 
 export function FinanceScreen() {
-  const { data, resetCount } = useDemo()
+  const trpc = useTRPC()
   const [period, setPeriod] = React.useState(currentPeriod())
   const [tab, setTab] = React.useState("expenses")
-  const loading = useSimulatedLoading(`finance-${period}-${tab}-${resetCount}`)
-  const closed = closedPayoutFor(data, period)
+  const statusQuery = useQuery(trpc.payouts.periodStatus.queryOptions({ period }))
+  const closed = statusQuery.data?.closed ? statusQuery.data : null
 
   return (
     <div className="flex flex-col gap-6">
@@ -55,7 +59,7 @@ export function FinanceScreen() {
         </Field>
       </PageHeader>
 
-      {closed && <ClosedMonthAlert period={period} payoutId={closed.id} />}
+      {closed && <ClosedMonthAlert period={period} payoutId={closed.payoutId ?? undefined} />}
 
       <Tabs value={tab} onValueChange={(value) => setTab(String(value))}>
         <TabsList>
@@ -69,10 +73,10 @@ export function FinanceScreen() {
           </TabsTrigger>
         </TabsList>
         <TabsContent value="expenses">
-          <ExpensesTab period={period} loading={loading} readOnly={Boolean(closed)} />
+          <ExpensesTab period={period} readOnly={Boolean(closed)} />
         </TabsContent>
         <TabsContent value="advances">
-          <AdvancesTab period={period} loading={loading} readOnly={Boolean(closed)} />
+          <AdvancesTab period={period} readOnly={Boolean(closed)} />
         </TabsContent>
       </Tabs>
     </div>
@@ -81,10 +85,10 @@ export function FinanceScreen() {
 
 // ---------------- Despesas ----------------
 
-function ExpensesTab({ period, loading, readOnly }: { period: string; loading: boolean; readOnly: boolean }) {
-  const { data, actions } = useDemo()
+function ExpensesTab({ period, readOnly }: { period: string; readOnly: boolean }) {
+  const trpc = useTRPC()
+  const invalidateAll = useInvalidateAll()
   const { session } = useRequiredSession()
-  const actor = useActor()
   const isManager = session.activeRole === "manager"
   const today = todayIso()
 
@@ -93,15 +97,18 @@ function ExpensesTab({ period, loading, readOnly }: { period: string; loading: b
   const [amount, setAmount] = React.useState("")
   const [incurredOn, setIncurredOn] = React.useState(today)
   const [errors, setErrors] = React.useState<{ description?: string; category?: string; amount?: string; date?: string }>({})
-  const [saving, setSaving] = React.useState(false)
   const [deleting, setDeleting] = React.useState<Expense | null>(null)
 
-  const expenses = React.useMemo(
-    () => data.expenses.filter((e) => !e.deletedAt && isInPeriod(e.incurredOn, period)).sort((a, b) => b.incurredOn.localeCompare(a.incurredOn)),
-    [data.expenses, period],
-  )
-  const total = expenses.reduce((sum, e) => sum + e.amount, 0)
-  const formClosed = closedPayoutFor(data, periodOf(incurredOn))
+  const listQuery = useQuery(trpc.expenses.list.queryOptions({ period, limit: 100 }))
+  const formPeriod = periodOf(incurredOn)
+  const formStatusQuery = useQuery(trpc.payouts.periodStatus.queryOptions({ period: formPeriod }, { enabled: /^\d{4}-\d{2}$/.test(formPeriod) }))
+  const formClosed = formStatusQuery.data?.closed ? formStatusQuery.data : null
+  const createExpense = useMutation(trpc.expenses.create.mutationOptions())
+  const deleteExpense = useMutation(trpc.expenses.delete.mutationOptions())
+  const saving = createExpense.isPending
+
+  const expenses = listQuery.data?.items ?? []
+  const total = listQuery.data?.total ?? 0
   const categoryItems = (Object.keys(EXPENSE_CATEGORY_LABEL) as ExpenseCategory[]).map((c) => ({ value: c, label: EXPENSE_CATEGORY_LABEL[c] }))
 
   async function handleSubmit(event: React.FormEvent) {
@@ -114,25 +121,24 @@ function ExpensesTab({ period, loading, readOnly }: { period: string; loading: b
     if (!incurredOn || incurredOn > today) next.date = "A data não pode ser futura."
     setErrors(next)
     if (Object.keys(next).length > 0 || !category || value === null) return
-    setSaving(true)
     try {
-      const created = await actions.createExpense({ description, category, amount: value, incurredOn }, actor)
+      const created = await createExpense.mutateAsync({ description, category, amount: value, incurredOn })
       toast.add({ type: "success", title: "Despesa lançada", description: `${created.description} · ${formatMoney(created.amount)}` })
       setDescription("")
       setCategory(null)
       setAmount("")
       setIncurredOn(today)
+      await invalidateAll()
     } catch (error) {
       toast.add({ type: "error", title: "Não foi possível lançar a despesa", description: errorMessage(error) })
-    } finally {
-      setSaving(false)
     }
   }
 
   async function handleDelete() {
     if (!deleting) return
     try {
-      await actions.deleteExpense(deleting.id)
+      await deleteExpense.mutateAsync({ id: deleting.id })
+      await invalidateAll()
       toast.add({ type: "success", title: "Despesa excluída", description: deleting.description })
     } catch (error) {
       toast.add({ type: "error", title: "Não foi possível excluir", description: errorMessage(error) })
@@ -150,7 +156,7 @@ function ExpensesTab({ period, loading, readOnly }: { period: string; loading: b
         <CardContent>
           <form onSubmit={handleSubmit} noValidate>
             <FieldGroup>
-              {formClosed && periodOf(incurredOn) !== period && <ClosedMonthAlert period={periodOf(incurredOn)} payoutId={formClosed.id} />}
+              {formClosed && formPeriod !== period && <ClosedMonthAlert period={formPeriod} payoutId={formClosed.payoutId ?? undefined} />}
               <Field data-invalid={errors.description ? true : undefined}>
                 <FieldLabel htmlFor="expense-description">Descrição</FieldLabel>
                 <Input id="expense-description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ex.: Energia elétrica" disabled={saving} aria-invalid={errors.description ? true : undefined} />
@@ -203,8 +209,10 @@ function ExpensesTab({ period, loading, readOnly }: { period: string; loading: b
           <CardDescription>Saem da receita antes do rateio.</CardDescription>
         </CardHeader>
         <CardContent>
-          {loading ? (
+          {listQuery.isPending ? (
             <TableSkeleton rows={4} columns={4} />
+          ) : listQuery.isError ? (
+            <QueryError error={listQuery.error} onRetry={() => void listQuery.refetch()} retrying={listQuery.isFetching} />
           ) : expenses.length === 0 ? (
             <Empty className="border">
               <EmptyHeader>
@@ -232,7 +240,7 @@ function ExpensesTab({ period, loading, readOnly }: { period: string; loading: b
                     <TableCell className="whitespace-nowrap">{formatDate(expense.incurredOn)}</TableCell>
                     <TableCell className="font-medium">{expense.description}</TableCell>
                     <TableCell className="hidden md:table-cell">
-                      <Badge variant="secondary">{EXPENSE_CATEGORY_LABEL[expense.category]}</Badge>
+                      <Badge variant="secondary">{expenseCategoryLabel(expense.category)}</Badge>
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{formatMoney(expense.amount)}</TableCell>
                     {isManager && (
@@ -247,7 +255,7 @@ function ExpensesTab({ period, loading, readOnly }: { period: string; loading: b
               </TableBody>
               <TableFooter>
                 <TableRow>
-                  <TableCell colSpan={isManager ? 3 : 3} className="font-medium">
+                  <TableCell colSpan={3} className="font-medium">
                     Total do mês
                   </TableCell>
                   <TableCell className="text-right font-semibold tabular-nums">{formatMoney(total)}</TableCell>
@@ -274,38 +282,36 @@ function ExpensesTab({ period, loading, readOnly }: { period: string; loading: b
 
 // ---------------- Vales ----------------
 
-function AdvancesTab({ period, loading, readOnly }: { period: string; loading: boolean; readOnly: boolean }) {
-  const { data, actions } = useDemo()
+function AdvancesTab({ period, readOnly }: { period: string; readOnly: boolean }) {
+  const trpc = useTRPC()
+  const invalidateAll = useInvalidateAll()
   const { session } = useRequiredSession()
-  const actor = useActor()
   const isManager = session.activeRole === "manager"
   const today = todayIso()
 
   const [memberId, setMemberId] = React.useState<string | null>(null)
-  const [kind, setKind] = React.useState<AdvanceKind | null>(null)
+  const [kind, setKind] = React.useState<ManualAdvanceKind | null>(null)
   const [description, setDescription] = React.useState("")
   const [amount, setAmount] = React.useState("")
   const [grantedOn, setGrantedOn] = React.useState(today)
   const [errors, setErrors] = React.useState<{ member?: string; kind?: string; amount?: string; date?: string }>({})
-  const [saving, setSaving] = React.useState(false)
   const [statusFilter, setStatusFilter] = React.useState<AdvanceStatus>("pending")
   const [cancelling, setCancelling] = React.useState<Advance | null>(null)
   const [cancelReason, setCancelReason] = React.useState("")
 
-  const members = activeMembersOn(data.members, today).sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
-  const memberItems = members.map((m) => ({ value: m.id, label: m.name }))
-  const kindItems = (["cash_advance", "purchase", "other"] as AdvanceKind[]).map((k) => ({ value: k, label: ADVANCE_KIND_LABEL[k] }))
-  const memberName = (id: string) => data.members.find((m) => m.id === id)?.name ?? "—"
+  const membersQuery = useQuery(trpc.members.list.queryOptions({ activeOn: today, includeInactive: false }))
+  const listQuery = useQuery(trpc.advances.list.queryOptions({ period, status: statusFilter, limit: 100 }))
+  const formPeriod = periodOf(grantedOn)
+  const formStatusQuery = useQuery(trpc.payouts.periodStatus.queryOptions({ period: formPeriod }, { enabled: /^\d{4}-\d{2}$/.test(formPeriod) }))
+  const formClosed = formStatusQuery.data?.closed ? formStatusQuery.data : null
+  const createAdvance = useMutation(trpc.advances.create.mutationOptions())
+  const cancelAdvance = useMutation(trpc.advances.cancel.mutationOptions())
+  const saving = createAdvance.isPending
 
-  const advances = React.useMemo(
-    () =>
-      data.advances
-        .filter((a) => isInPeriod(a.grantedOn, period) && a.status === statusFilter)
-        .sort((a, b) => b.grantedOn.localeCompare(a.grantedOn)),
-    [data.advances, period, statusFilter],
-  )
-  const total = advances.reduce((sum, a) => sum + a.amount, 0)
-  const formClosed = closedPayoutFor(data, periodOf(grantedOn))
+  const memberItems = (membersQuery.data?.items ?? []).map((m) => ({ value: m.id, label: m.name }))
+  const kindItems = (["cash_advance", "purchase", "other"] as ManualAdvanceKind[]).map((k) => ({ value: k, label: ADVANCE_KIND_LABEL[k] }))
+  const advances = listQuery.data?.items ?? []
+  const total = listQuery.data?.total ?? 0
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
@@ -317,16 +323,12 @@ function AdvancesTab({ period, loading, readOnly }: { period: string; loading: b
     if (!grantedOn || grantedOn > today) next.date = "A data não pode ser futura."
     setErrors(next)
     if (Object.keys(next).length > 0 || !memberId || !kind || value === null) return
-    setSaving(true)
     try {
-      const created = await actions.createAdvance(
-        { memberId, kind, description: description || ADVANCE_KIND_LABEL[kind], amount: value, grantedOn },
-        actor,
-      )
+      const created = await createAdvance.mutateAsync({ memberId, kind, description: description.trim() || ADVANCE_KIND_LABEL[kind], amount: value, grantedOn })
       toast.add({
         type: "success",
         title: "Vale registrado",
-        description: `${memberName(created.memberId)} · ${formatMoney(created.amount)} · desconta em ${formatPeriod(periodOf(created.grantedOn))}`,
+        description: `${created.memberName} · ${formatMoney(created.amount)} · desconta em ${formatPeriod(periodOf(created.grantedOn))}`,
       })
       setMemberId(null)
       setKind(null)
@@ -334,18 +336,18 @@ function AdvancesTab({ period, loading, readOnly }: { period: string; loading: b
       setAmount("")
       setGrantedOn(today)
       setStatusFilter("pending")
+      await invalidateAll()
     } catch (error) {
       toast.add({ type: "error", title: "Não foi possível registrar o vale", description: errorMessage(error) })
-    } finally {
-      setSaving(false)
     }
   }
 
   async function handleCancel() {
     if (!cancelling) return
     try {
-      await actions.cancelAdvance(cancelling.id, cancelReason)
-      toast.add({ type: "success", title: "Vale cancelado", description: `${memberName(cancelling.memberId)} · ${formatMoney(cancelling.amount)}` })
+      await cancelAdvance.mutateAsync({ id: cancelling.id, reason: cancelReason })
+      await invalidateAll()
+      toast.add({ type: "success", title: "Vale cancelado", description: `${cancelling.memberName} · ${formatMoney(cancelling.amount)}` })
       setCancelReason("")
     } catch (error) {
       toast.add({ type: "error", title: "Não foi possível cancelar", description: errorMessage(error) })
@@ -363,12 +365,12 @@ function AdvancesTab({ period, loading, readOnly }: { period: string; loading: b
         <CardContent>
           <form onSubmit={handleSubmit} noValidate>
             <FieldGroup>
-              {formClosed && periodOf(grantedOn) !== period && <ClosedMonthAlert period={periodOf(grantedOn)} payoutId={formClosed.id} />}
+              {formClosed && formPeriod !== period && <ClosedMonthAlert period={formPeriod} payoutId={formClosed.payoutId ?? undefined} />}
               <Field data-invalid={errors.member ? true : undefined}>
                 <FieldLabel htmlFor="advance-member">Cooperado</FieldLabel>
-                <Select items={memberItems} value={memberId} onValueChange={(v) => setMemberId(v)} disabled={saving}>
+                <Select items={memberItems} value={memberId} onValueChange={(v) => setMemberId(v)} disabled={saving || membersQuery.isPending}>
                   <SelectTrigger id="advance-member" className="w-full" aria-invalid={errors.member ? true : undefined}>
-                    <SelectValue placeholder="Escolha o cooperado" />
+                    <SelectValue placeholder={membersQuery.isPending ? "Carregando cooperados…" : "Escolha o cooperado"} />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
@@ -380,7 +382,7 @@ function AdvancesTab({ period, loading, readOnly }: { period: string; loading: b
                     </SelectGroup>
                   </SelectContent>
                 </Select>
-                <FieldError>{errors.member}</FieldError>
+                <FieldError>{errors.member ?? (membersQuery.isError ? errorMessage(membersQuery.error) : null)}</FieldError>
               </Field>
               <Field data-invalid={errors.kind ? true : undefined}>
                 <FieldLabel htmlFor="advance-kind">Tipo</FieldLabel>
@@ -448,8 +450,10 @@ function AdvancesTab({ period, loading, readOnly }: { period: string; loading: b
           </div>
         </CardHeader>
         <CardContent>
-          {loading ? (
+          {listQuery.isPending ? (
             <TableSkeleton rows={4} columns={4} />
+          ) : listQuery.isError ? (
+            <QueryError error={listQuery.error} onRetry={() => void listQuery.refetch()} retrying={listQuery.isFetching} />
           ) : advances.length === 0 ? (
             <Empty className="border">
               <EmptyHeader>
@@ -479,7 +483,7 @@ function AdvancesTab({ period, loading, readOnly }: { period: string; loading: b
                     <TableCell className="whitespace-nowrap">{formatDate(advance.grantedOn)}</TableCell>
                     <TableCell className="font-medium">
                       <span className="flex flex-wrap items-center gap-1.5">
-                        {memberName(advance.memberId)}
+                        {advance.memberName}
                         {advance.kind === "carry_over" && <Badge variant="outline">saldo de mês anterior</Badge>}
                       </span>
                     </TableCell>
@@ -530,7 +534,7 @@ function AdvancesTab({ period, loading, readOnly }: { period: string; loading: b
         title="Cancelar este vale?"
         description={
           cancelling
-            ? `${memberName(cancelling.memberId)}, ${formatMoney(cancelling.amount)}, ${formatDate(cancelling.grantedOn)}. O vale deixa de ser descontado no fechamento.`
+            ? `${cancelling.memberName}, ${formatMoney(cancelling.amount)}, ${formatDate(cancelling.grantedOn)}. O vale deixa de ser descontado no fechamento.`
             : ""
         }
         confirmLabel="Cancelar vale"

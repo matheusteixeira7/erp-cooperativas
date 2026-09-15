@@ -6,7 +6,7 @@ import { LockIcon } from "lucide-react"
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@workspace/ui/components/alert"
 import { Button } from "@workspace/ui/components/button"
 
-import { useRequiredSession } from "@/lib/demo/session"
+import { useRequiredSession } from "@/lib/session"
 import { formatPeriod } from "@/lib/format"
 
 export function ClosedMonthAlert({ period, payoutId }: { period: string; payoutId?: string }) {

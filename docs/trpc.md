@@ -21,8 +21,17 @@ por domínio de negócio. Não crie outro `initTRPC`.
   ser `nullish()`, pois o cliente pode reenviar `undefined` durante refetch.
 - No Server Component, crie um caller com `createCaller` e o contexto interno;
   não faça fetch HTTP para a própria aplicação. Componentes de cliente consomem
-  `/api/trpc` com `@trpc/client` (ou a integração de React Query quando ela for
-  adicionada).
+  `/api/trpc` pela integração tRPC + TanStack Query em `apps/web/lib/trpc/client.tsx`
+  (`useTRPC()`, `useQuery(trpc.x.y.queryOptions(...))`,
+  `useMutation(trpc.x.y.mutationOptions())`). Depois de uma mutation, invalide
+  as queries afetadas (`useInvalidateAll()` em `lib/trpc/hooks.ts` invalida tudo).
+- Controle de perfil: use `managerProcedure`, `staffProcedure` (gestor ou
+  operador), `memberProcedure` ou `requireRole(...)` de `init.ts` conforme a
+  matriz PL-001; o middleware devolve FORBIDDEN com ERR-AUTH-002.
+- Casos de uso lançam `DomainError` (`server/shared/errors.ts`); o middleware de
+  `init.ts` converte em `TRPCError` com a mensagem pt-BR do catálogo e expõe
+  `data.domainCode`. Na UI, `errorMessage(error)` e `domainCodeOf(error)` em
+  `lib/trpc/errors.ts` leem isso.
 
 ## Exemplo: router de cooperativas
 
@@ -111,5 +120,6 @@ const trpc = createTRPCClient<AppRouter>({
 const result = await trpc.cooperatives.list.query({ limit: 20 })
 ```
 
-Quando a primeira tela interativa que faça cache/refetch for criada, adicione a
-integração oficial tRPC + TanStack Query; não introduza estado de cache manual.
+A integração oficial tRPC + TanStack Query já está montada em
+`apps/web/lib/trpc/client.tsx` (`TRPCReactProvider` em `components/providers.tsx`).
+Não introduza estado de cache manual nem outro client.

@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { EyeIcon, FileTextIcon, PlusIcon, Trash2Icon, TruckIcon } from "lucide-react"
 
 import { Badge } from "@workspace/ui/components/badge"
@@ -37,53 +38,45 @@ import { ClosedMonthAlert } from "@/components/closed-month-alert"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { MaterialSelect } from "@/components/material-select"
 import { PeriodSelect } from "@/components/period-select"
+import { QueryError } from "@/components/query-error"
 import { TableSkeleton } from "@/components/table-skeleton"
-import { currentPeriod, isInPeriod, periodOf, todayIso } from "@/lib/dates"
-import { errorMessage } from "@/lib/demo/errors"
-import { useRequiredSession } from "@/lib/demo/session"
-import { closedPayoutFor, lastPricePerKg, useDemo, useSimulatedLoading, type PurchaseDraftItem } from "@/lib/demo/store"
-import {
-  MATERIAL_CONDITION_LABEL,
-  PAYMENT_METHOD_LABEL,
-  SUPPLIER_KIND_LABEL,
-  type MaterialCondition,
-  type PaymentMethod,
-  type Purchase,
-  type Supplier,
-  type SupplierKind,
-} from "@/lib/demo/types"
+import { currentPeriod, periodOf, todayIso } from "@/lib/dates"
+import { MATERIAL_CONDITION_LABEL, PAYMENT_METHOD_LABEL, SUPPLIER_KIND_LABEL, type MaterialCondition, type PaymentMethod, type SupplierKind } from "@/lib/domain/enums"
 import { itemSubtotal } from "@/lib/domain/payout"
-import { formatCpf, formatDate, formatMoney, formatPricePerKg, formatShortDate, formatWeight, maskCpf, parseDecimal } from "@/lib/format"
-import { useActor } from "@/lib/use-actor"
+import { downloadBase64File } from "@/lib/download"
+import { formatCpf, formatDate, formatMoney, formatPricePerKg, formatShortDate, formatWeight, parseDecimal } from "@/lib/format"
+import { useRequiredSession } from "@/lib/session"
+import { useTRPC, useTRPCClient, type RouterOutputs } from "@/lib/trpc/client"
+import { errorMessage } from "@/lib/trpc/errors"
+import { useInvalidateAll } from "@/lib/trpc/hooks"
 import { isValidCpf, isValidPixKey, onlyDigits } from "@/lib/validation"
 
-type DraftItem = PurchaseDraftItem & { key: string; subtotal: number }
+type Supplier = RouterOutputs["suppliers"]["list"][number]
+type Purchase = RouterOutputs["purchases"]["list"]["items"][number]
+type DraftItem = { key: string; materialTypeId: string; condition: MaterialCondition; weightKg: number; pricePerKg: number; subtotal: number }
 
 function supplierDocument(supplier: Supplier) {
-  if (supplier.kind === "company") return supplier.cnpj ? `CNPJ ${supplier.cnpj}` : SUPPLIER_KIND_LABEL.company
-  return supplier.cpf ? `CPF ${maskCpf(supplier.cpf)}` : SUPPLIER_KIND_LABEL.individual
+  return supplier.document ?? SUPPLIER_KIND_LABEL[supplier.kind]
 }
 
 /** Seção "Compras" da tela de vendas (FL-008). Mesmo layout da venda, em outra cor, para o operador não confundir. */
 export function PurchasesSection() {
-  const { data, actions, resetCount } = useDemo()
+  const trpc = useTRPC()
+  const client = useTRPCClient()
+  const invalidateAll = useInvalidateAll()
   const { session } = useRequiredSession()
-  const actor = useActor()
   const today = todayIso()
   const isManager = session.activeRole === "manager"
 
   // --- list ---
   const [period, setPeriod] = React.useState(currentPeriod())
-  const loading = useSimulatedLoading(`purchases-${period}-${resetCount}`)
-  const purchases = React.useMemo(
-    () =>
-      data.purchases
-        .filter((p) => !p.deletedAt && isInPeriod(p.purchasedOn, period))
-        .sort((a, b) => b.purchasedOn.localeCompare(a.purchasedOn)),
-    [data.purchases, period],
-  )
+  const purchasesQuery = useQuery(trpc.purchases.list.queryOptions({ period, limit: 100 }))
+  const suppliersQuery = useQuery(trpc.suppliers.list.queryOptions({ includeInactive: false }))
+  const materialsQuery = useQuery(trpc.materialTypes.list.queryOptions({ includeInactive: false }))
+  const purchases = purchasesQuery.data?.items ?? []
   const [viewing, setViewing] = React.useState<Purchase | null>(null)
   const [deleting, setDeleting] = React.useState<Purchase | null>(null)
+  const [receiptFor, setReceiptFor] = React.useState<string | null>(null)
 
   // --- form ---
   const [supplier, setSupplier] = React.useState<Supplier | null>(null)
@@ -97,35 +90,33 @@ export function PurchasesSection() {
   const [items, setItems] = React.useState<DraftItem[]>([])
   const [itemErrors, setItemErrors] = React.useState<{ material?: string; weight?: string; price?: string }>({})
   const [formError, setFormError] = React.useState<string | null>(null)
-  const [saving, setSaving] = React.useState(false)
   const [newSupplierOpen, setNewSupplierOpen] = React.useState(false)
   const weightRef = React.useRef<HTMLInputElement>(null)
 
   const formPeriod = periodOf(purchasedOn)
-  const formClosed = closedPayoutFor(data, formPeriod)
-  const listClosed = closedPayoutFor(data, period)
-  const activeSuppliers = data.suppliers.filter((s) => s.active)
-  const activeMaterials = data.materialTypes.filter((m) => m.active)
-  const materialName = (id: string) => data.materialTypes.find((m) => m.id === id)?.name ?? "—"
-  const supplierById = (id: string) => data.suppliers.find((s) => s.id === id)
-  const supplierName = (id: string) => supplierById(id)?.name ?? "—"
+  const formStatusQuery = useQuery(trpc.payouts.periodStatus.queryOptions({ period: formPeriod }, { enabled: /^\d{4}-\d{2}$/.test(formPeriod) }))
+  const formClosed = formStatusQuery.data?.closed ? formStatusQuery.data : null
+  const listClosed = purchasesQuery.data?.periodClosed ? purchasesQuery.data : null
+  const activeSuppliers = suppliersQuery.data ?? []
+  const activeMaterials = materialsQuery.data ?? []
+  const materialName = (id: string) => activeMaterials.find((m) => m.id === id)?.name ?? "—"
   const conditionLabel = (value: MaterialCondition) => MATERIAL_CONDITION_LABEL[value].toLowerCase()
-  const priceSuggestion = supplier && materialTypeId ? lastPricePerKg(data, { materialTypeId, condition, supplierId: supplier.id }) : null
+
+  const suggestionQuery = useQuery(
+    trpc.materialTypes.lastPrice.queryOptions(
+      { materialTypeId: materialTypeId ?? "", condition, supplierId: supplier?.id ?? "" },
+      { enabled: Boolean(supplier && materialTypeId) },
+    ),
+  )
+  const priceSuggestion = supplier && materialTypeId ? (suggestionQuery.data ?? null) : null
+
+  const createPurchase = useMutation(trpc.purchases.create.mutationOptions())
+  const deletePurchase = useMutation(trpc.purchases.delete.mutationOptions())
+  const saving = createPurchase.isPending
 
   const totalWeight = items.reduce((sum, i) => sum + i.weightKg, 0)
   const totalAmount = items.reduce((sum, i) => sum + i.subtotal, 0)
-
-  const bySupplier = React.useMemo(() => {
-    const map = new Map<string, { amount: number; weightKg: number; count: number }>()
-    for (const purchase of purchases) {
-      const entry = map.get(purchase.supplierId) ?? { amount: 0, weightKg: 0, count: 0 }
-      entry.amount += purchase.totalAmount
-      entry.weightKg += purchase.totalWeightKg
-      entry.count += 1
-      map.set(purchase.supplierId, entry)
-    }
-    return [...map.entries()].sort((a, b) => b[1].amount - a[1].amount)
-  }, [purchases])
+  const bySupplier = purchasesQuery.data?.bySupplier ?? []
 
   function addItem() {
     const weightKg = parseDecimal(weight)
@@ -168,53 +159,51 @@ export function PurchasesSection() {
       setFormError("Adicione pelo menos um material.")
       return
     }
-    setSaving(true)
     try {
-      const purchase = await actions.createPurchase(
-        {
-          supplierId: supplier.id,
-          purchasedOn,
-          items: items.map(({ materialTypeId, condition, weightKg, pricePerKg }) => ({ materialTypeId, condition, weightKg, pricePerKg })),
-          paymentMethod,
-          paidOn: paid ? purchasedOn : null,
-          note: "",
-        },
-        actor,
-      )
+      const purchase = await createPurchase.mutateAsync({
+        supplierId: supplier.id,
+        purchasedOn,
+        items: items.map(({ materialTypeId, condition, weightKg, pricePerKg }) => ({ materialTypeId, condition, weightKg, pricePerKg })),
+        paymentMethod,
+        paidOn: paid ? purchasedOn : null,
+      })
       toast.add({
         type: "success",
         title: "Compra registrada",
-        description: `${supplier.name} · ${formatWeight(purchase.totalWeightKg)} · ${formatMoney(purchase.totalAmount)} · ${PAYMENT_METHOD_LABEL[purchase.paymentMethod]}${purchase.paidOn ? "" : " (a pagar)"}`,
+        description: `${purchase.supplierName} · ${formatWeight(purchase.totalWeightKg)} · ${formatMoney(purchase.totalAmount)} · ${PAYMENT_METHOD_LABEL[purchase.paymentMethod]}${purchase.paidOn ? "" : " (a pagar)"}`,
       })
       resetForm()
       setPeriod(periodOf(purchase.purchasedOn))
+      await invalidateAll()
     } catch (error) {
       toast.add({ type: "error", title: "Não foi possível registrar a compra", description: errorMessage(error) })
-    } finally {
-      setSaving(false)
     }
   }
 
   async function handleDelete() {
     if (!deleting) return
     try {
-      await actions.deletePurchase(deleting.id)
-      toast.add({ type: "success", title: "Compra excluída", description: `${supplierName(deleting.supplierId)} · ${formatDate(deleting.purchasedOn)}` })
+      await deletePurchase.mutateAsync({ id: deleting.id })
+      await invalidateAll()
+      toast.add({ type: "success", title: "Compra excluída", description: `${deleting.supplierName} · ${formatDate(deleting.purchasedOn)}` })
     } catch (error) {
       toast.add({ type: "error", title: "Não foi possível excluir", description: errorMessage(error) })
       throw error
     }
   }
 
-  function printReceipt(purchase: Purchase) {
+  async function printReceipt(purchase: Purchase) {
+    setReceiptFor(purchase.id)
     const toastId = toast.add({ type: "loading", title: "Gerando recibo em PDF…" })
-    setTimeout(() => {
-      toast.update(toastId, {
-        type: "info",
-        title: "Recibo simulado",
-        description: `No produto final, abre aqui o recibo de ${formatMoney(purchase.totalAmount)} para ${supplierName(purchase.supplierId)} assinar.`,
-      })
-    }, 1200)
+    try {
+      const file = await client.purchases.receipt.query({ id: purchase.id })
+      downloadBase64File(file)
+      toast.update(toastId, { type: "success", title: "Recibo gerado", description: `${file.filename} · ${formatMoney(purchase.totalAmount)} para ${purchase.supplierName} assinar.` })
+    } catch (error) {
+      toast.update(toastId, { type: "error", title: "Não foi possível gerar o recibo", description: errorMessage(error) })
+    } finally {
+      setReceiptFor(null)
+    }
   }
 
   const disabledForm = Boolean(formClosed) || saving
@@ -232,7 +221,18 @@ export function PurchasesSection() {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
-          {formClosed && <ClosedMonthAlert period={formPeriod} payoutId={formClosed.id} />}
+          {formClosed && <ClosedMonthAlert period={formPeriod} payoutId={formClosed.payoutId ?? undefined} />}
+          {(suppliersQuery.isError || materialsQuery.isError) && (
+            <QueryError
+              error={suppliersQuery.error ?? materialsQuery.error}
+              onRetry={() => {
+                void suppliersQuery.refetch()
+                void materialsQuery.refetch()
+              }}
+              retrying={suppliersQuery.isFetching || materialsQuery.isFetching}
+              title="Não foi possível carregar fornecedores e materiais"
+            />
+          )}
 
           <FieldGroup>
             <div className="grid gap-4 md:grid-cols-[1fr_auto]">
@@ -247,9 +247,15 @@ export function PurchasesSection() {
                       setFormError(null)
                     }}
                     itemToStringLabel={(item: Supplier) => item.name}
-                    disabled={disabledForm}
+                    disabled={disabledForm || suppliersQuery.isPending}
                   >
-                    <ComboboxInput id="purchase-supplier" placeholder="Buscar fornecedor..." className="flex-1" showClear aria-invalid={formError && !supplier ? true : undefined} />
+                    <ComboboxInput
+                      id="purchase-supplier"
+                      placeholder={suppliersQuery.isPending ? "Carregando fornecedores…" : "Buscar fornecedor..."}
+                      className="flex-1"
+                      showClear
+                      aria-invalid={formError && !supplier ? true : undefined}
+                    />
                     <ComboboxContent>
                       <ComboboxEmpty>Nenhum fornecedor com esse nome. Use “Novo fornecedor”.</ComboboxEmpty>
                       <ComboboxList>
@@ -286,6 +292,7 @@ export function PurchasesSection() {
                   <MaterialSelect
                     id="purchase-material"
                     materials={activeMaterials}
+                    loading={materialsQuery.isPending}
                     value={materialTypeId}
                     onValueChange={(value) => {
                       setMaterialTypeId(value)
@@ -372,6 +379,8 @@ export function PurchasesSection() {
                     </button>{" "}
                     em {formatShortDate(priceSuggestion.on)}. Só sugestão.
                   </>
+                ) : suggestionQuery.isFetching ? (
+                  "Buscando o último preço pago…"
                 ) : (
                   "Compra de catador costuma ser material solto. Pressione Enter no preço para adicionar rapidamente."
                 )}
@@ -497,9 +506,11 @@ export function PurchasesSection() {
           </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          {listClosed && <ClosedMonthAlert period={period} payoutId={listClosed.id} />}
-          {loading ? (
+          {listClosed && <ClosedMonthAlert period={period} payoutId={listClosed.closedPayoutId ?? undefined} />}
+          {purchasesQuery.isPending ? (
             <TableSkeleton rows={3} columns={5} />
+          ) : purchasesQuery.isError ? (
+            <QueryError error={purchasesQuery.error} onRetry={() => void purchasesQuery.refetch()} retrying={purchasesQuery.isFetching} title="Não foi possível carregar as compras" />
           ) : purchases.length === 0 ? (
             <Empty className="border">
               <EmptyHeader>
@@ -530,15 +541,15 @@ export function PurchasesSection() {
                       <TableCell className="whitespace-nowrap">{formatDate(purchase.purchasedOn)}</TableCell>
                       <TableCell>
                         <span className="flex flex-col">
-                          <span className="font-medium">{supplierName(purchase.supplierId)}</span>
-                          <span className="text-xs text-muted-foreground">{supplierById(purchase.supplierId) ? supplierDocument(supplierById(purchase.supplierId)!) : ""}</span>
+                          <span className="font-medium">{purchase.supplierName}</span>
+                          <span className="text-xs text-muted-foreground">{purchase.supplierDocument ?? SUPPLIER_KIND_LABEL[purchase.supplierKind]}</span>
                         </span>
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
                         <span className="flex flex-wrap gap-1">
                           {purchase.items.map((item) => (
                             <Badge key={item.id} variant="secondary">
-                              {materialName(item.materialTypeId)} · {conditionLabel(item.condition)}
+                              {item.materialTypeName} · {conditionLabel(item.condition)}
                             </Badge>
                           ))}
                         </span>
@@ -556,8 +567,8 @@ export function PurchasesSection() {
                           <Button variant="ghost" size="icon-sm" aria-label="Ver detalhes" onClick={() => setViewing(purchase)}>
                             <EyeIcon />
                           </Button>
-                          <Button variant="ghost" size="icon-sm" aria-label="Recibo" onClick={() => printReceipt(purchase)}>
-                            <FileTextIcon />
+                          <Button variant="ghost" size="icon-sm" aria-label="Recibo" disabled={receiptFor === purchase.id} onClick={() => void printReceipt(purchase)}>
+                            {receiptFor === purchase.id ? <Spinner /> : <FileTextIcon />}
                           </Button>
                           {isManager && (
                             <Button variant="ghost" size="icon-sm" aria-label="Excluir compra" disabled={Boolean(listClosed)} onClick={() => setDeleting(purchase)}>
@@ -572,10 +583,10 @@ export function PurchasesSection() {
                 <TableFooter>
                   <TableRow>
                     <TableCell colSpan={4} className="font-medium">
-                      {purchases.length} compra(s)
+                      {purchasesQuery.data.totals.count} compra(s)
                     </TableCell>
-                    <TableCell className="text-right font-medium tabular-nums">{formatWeight(purchases.reduce((s, x) => s + x.totalWeightKg, 0))}</TableCell>
-                    <TableCell className="text-right font-semibold tabular-nums">{formatMoney(purchases.reduce((s, x) => s + x.totalAmount, 0))}</TableCell>
+                    <TableCell className="text-right font-medium tabular-nums">{formatWeight(purchasesQuery.data.totals.weightKg)}</TableCell>
+                    <TableCell className="text-right font-semibold tabular-nums">{formatMoney(purchasesQuery.data.totals.amount)}</TableCell>
                     <TableCell />
                   </TableRow>
                 </TableFooter>
@@ -584,12 +595,12 @@ export function PurchasesSection() {
               <div className="rounded-lg border bg-muted/30 p-3">
                 <p className="mb-2 text-sm font-medium">Por fornecedor</p>
                 <ul className="flex flex-col gap-1 text-sm">
-                  {bySupplier.map(([supplierId, totals]) => (
-                    <li key={supplierId} className="flex items-center justify-between gap-2">
+                  {bySupplier.map((entry) => (
+                    <li key={entry.supplierId} className="flex items-center justify-between gap-2">
                       <span>
-                        {supplierName(supplierId)} <span className="text-muted-foreground">· {totals.count} compra(s) · {formatWeight(totals.weightKg)}</span>
+                        {entry.supplierName} <span className="text-muted-foreground">· {entry.count} compra(s) · {formatWeight(entry.weightKg)}</span>
                       </span>
-                      <span className="tabular-nums">{formatMoney(totals.amount)}</span>
+                      <span className="tabular-nums">{formatMoney(entry.amount)}</span>
                     </li>
                   ))}
                 </ul>
@@ -615,7 +626,7 @@ export function PurchasesSection() {
               <DialogHeader>
                 <DialogTitle>Compra de {formatDate(viewing.purchasedOn)}</DialogTitle>
                 <DialogDescription>
-                  {supplierName(viewing.supplierId)} · {PAYMENT_METHOD_LABEL[viewing.paymentMethod]}
+                  {viewing.supplierName} · {PAYMENT_METHOD_LABEL[viewing.paymentMethod]}
                   {viewing.paidOn ? ` · pago em ${formatDate(viewing.paidOn)}` : " · a pagar"}
                 </DialogDescription>
               </DialogHeader>
@@ -633,7 +644,7 @@ export function PurchasesSection() {
                     <TableRow key={item.id}>
                       <TableCell>
                         <span className="flex flex-wrap items-center gap-1.5">
-                          {materialName(item.materialTypeId)}
+                          {item.materialTypeName}
                           <Badge variant="outline">{conditionLabel(item.condition)}</Badge>
                         </span>
                       </TableCell>
@@ -653,8 +664,8 @@ export function PurchasesSection() {
                 </TableFooter>
               </Table>
               <DialogFooter showCloseButton>
-                <Button variant="outline" onClick={() => printReceipt(viewing)}>
-                  <FileTextIcon data-icon="inline-start" />
+                <Button variant="outline" onClick={() => void printReceipt(viewing)} disabled={receiptFor === viewing.id}>
+                  {receiptFor === viewing.id ? <Spinner data-icon="inline-start" /> : <FileTextIcon data-icon="inline-start" />}
                   Recibo (PDF)
                 </Button>
               </DialogFooter>
@@ -669,7 +680,7 @@ export function PurchasesSection() {
         title="Excluir esta compra?"
         description={
           deleting
-            ? `${supplierName(deleting.supplierId)}, ${formatDate(deleting.purchasedOn)}, ${formatMoney(deleting.totalAmount)}. A compra sai dos cálculos do mês. Esta ação não pode ser desfeita.`
+            ? `${deleting.supplierName}, ${formatDate(deleting.purchasedOn)}, ${formatMoney(deleting.totalAmount)}. A compra sai dos cálculos do mês. Esta ação não pode ser desfeita.`
             : ""
         }
         confirmLabel="Excluir compra"
@@ -689,15 +700,17 @@ function NewSupplierDialog({
   onOpenChange: (open: boolean) => void
   onCreated: (supplier: Supplier) => void
 }) {
-  const { actions } = useDemo()
+  const trpc = useTRPC()
+  const invalidateAll = useInvalidateAll()
+  const createSupplier = useMutation(trpc.suppliers.create.mutationOptions())
   const [kind, setKind] = React.useState<SupplierKind>("individual")
   const [name, setName] = React.useState("")
   const [cpf, setCpf] = React.useState("")
   const [cnpj, setCnpj] = React.useState("")
   const [pixKey, setPixKey] = React.useState("")
   const [phone, setPhone] = React.useState("")
-  const [errors, setErrors] = React.useState<{ name?: string; cpf?: string; cnpj?: string; pixKey?: string }>({})
-  const [saving, setSaving] = React.useState(false)
+  const [errors, setErrors] = React.useState<{ name?: string; cpf?: string; cnpj?: string; pixKey?: string; form?: string }>({})
+  const saving = createSupplier.isPending
 
   function reset() {
     setKind("individual")
@@ -724,16 +737,14 @@ function NewSupplierDialog({
     if (pixKey.trim() && !isValidPixKey(pixKey)) next.pixKey = "Chave PIX inválida."
     setErrors(next)
     if (Object.keys(next).length > 0) return
-    setSaving(true)
     try {
-      const created = await actions.createSupplier({ kind, name, cpf: onlyDigits(cpf), cnpj: onlyDigits(cnpj), pixKey, phone: onlyDigits(phone) })
+      const created = await createSupplier.mutateAsync({ kind, name, cpf: onlyDigits(cpf), cnpj: onlyDigits(cnpj), pixKey: pixKey.trim(), phone: onlyDigits(phone) })
+      await invalidateAll()
       toast.add({ type: "success", title: "Fornecedor cadastrado", description: `${created.name} · ${supplierDocument(created)}` })
       onCreated(created)
       handleOpenChange(false)
     } catch (err) {
-      toast.add({ type: "error", title: "Não foi possível cadastrar", description: errorMessage(err) })
-    } finally {
-      setSaving(false)
+      setErrors({ form: errorMessage(err) })
     }
   }
 
@@ -746,6 +757,7 @@ function NewSupplierDialog({
             <DialogDescription>Catador avulso, outra cooperativa ou empresa. Cadastre uma vez e reaproveite nas próximas compras.</DialogDescription>
           </DialogHeader>
           <FieldGroup>
+            {errors.form && <FieldError>{errors.form}</FieldError>}
             <Field>
               <FieldLabel id="supplier-kind-label">Pessoa ou empresa?</FieldLabel>
               <ToggleGroup

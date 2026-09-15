@@ -3,27 +3,20 @@
 import * as React from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { useQueryClient } from "@tanstack/react-query"
 import { CheckCircle2Icon, RecycleIcon, TriangleAlertIcon } from "lucide-react"
 
 import { Alert, AlertDescription, AlertTitle } from "@workspace/ui/components/alert"
 import { Button } from "@workspace/ui/components/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@workspace/ui/components/card"
-import {
-  Field,
-  FieldDescription,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from "@workspace/ui/components/field"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@workspace/ui/components/field"
 import { Input } from "@workspace/ui/components/input"
 import { Spinner } from "@workspace/ui/components/spinner"
 
+import { homeForRole } from "@/lib/navigation"
+import { useSession } from "@/lib/session"
+import { useTRPC, useTRPCClient } from "@/lib/trpc/client"
+import { domainCodeOf, errorMessage } from "@/lib/trpc/errors"
 import { isValidEmail } from "@/lib/validation"
 
 type SignupForm = {
@@ -46,14 +39,24 @@ const EMPTY_FORM: SignupForm = {
 
 export function SignupForm() {
   const router = useRouter()
+  const trpc = useTRPC()
+  const client = useTRPCClient()
+  const queryClient = useQueryClient()
+  const { session } = useSession()
   const [form, setForm] = React.useState<SignupForm>(EMPTY_FORM)
   const [errors, setErrors] = React.useState<FormErrors>({})
+  const [formError, setFormError] = React.useState<string | null>(null)
   const [pending, setPending] = React.useState(false)
   const [done, setDone] = React.useState(false)
+
+  React.useEffect(() => {
+    if (session && !done) router.replace(homeForRole(session.activeRole))
+  }, [session, done, router])
 
   function setField<K extends keyof SignupForm>(key: K, value: SignupForm[K]) {
     setForm((prev) => ({ ...prev, [key]: value }))
     setErrors((prev) => ({ ...prev, [key]: undefined }))
+    setFormError(null)
   }
 
   function validate(): FormErrors {
@@ -72,11 +75,23 @@ export function SignupForm() {
     setErrors(next)
     if (Object.keys(next).length > 0) return
     setPending(true)
-    // Simulated account creation. No backend: the prototype just confirms and sends to login.
-    await new Promise((resolve) => setTimeout(resolve, 900))
-    setPending(false)
-    setDone(true)
-    setTimeout(() => router.push("/login"), 1800)
+    setFormError(null)
+    try {
+      const result = await client.auth.signup.mutate({
+        cooperativeName: form.cooperativeName.trim(),
+        managerName: form.managerName.trim(),
+        email: form.email.trim(),
+        password: form.password,
+      })
+      setDone(true)
+      queryClient.setQueryData(trpc.auth.session.queryKey(), result)
+      setTimeout(() => router.replace(homeForRole("manager")), 1500)
+    } catch (error) {
+      if (domainCodeOf(error) === "EMAIL_TAKEN") setErrors({ email: errorMessage(error) })
+      else setFormError(errorMessage(error))
+    } finally {
+      setPending(false)
+    }
   }
 
   if (done) {
@@ -96,7 +111,7 @@ export function SignupForm() {
             <div className="flex flex-col gap-1">
               <p className="font-medium">Cooperativa criada</p>
               <p className="text-sm text-muted-foreground">
-                A {form.cooperativeName.trim()} está pronta. Vamos te levar para o login.
+                A {form.cooperativeName.trim()} está pronta. Você já está logado como gestor.
               </p>
             </div>
             <Spinner />
@@ -119,18 +134,18 @@ export function SignupForm() {
       <Card>
         <CardHeader>
           <CardTitle>Criar conta</CardTitle>
-          <CardDescription>Você entra como gestor e pode convidar a equipe depois.</CardDescription>
+          <CardDescription>Você entra como gestor. O catálogo de materiais já vem preenchido e pode ser ajustado depois.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} noValidate>
             <FieldGroup>
-              <Alert>
-                <TriangleAlertIcon />
-                <AlertTitle>Protótipo</AlertTitle>
-                <AlertDescription>
-                  Nada é enviado a um servidor. Para explorar com dados prontos, use o login de demonstração.
-                </AlertDescription>
-              </Alert>
+              {formError && (
+                <Alert variant="destructive">
+                  <TriangleAlertIcon />
+                  <AlertTitle>Não foi possível criar a conta</AlertTitle>
+                  <AlertDescription>{formError}</AlertDescription>
+                </Alert>
+              )}
 
               <Field data-invalid={errors.cooperativeName ? true : undefined}>
                 <FieldLabel htmlFor="signup-coop">Nome da cooperativa</FieldLabel>

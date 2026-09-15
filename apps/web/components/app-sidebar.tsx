@@ -19,7 +19,7 @@ import {
 } from "@workspace/ui/components/sidebar"
 
 import { NavUser } from "@/components/nav-user"
-import { useRequiredSession } from "@/lib/demo/session"
+import { useRequiredSession } from "@/lib/session"
 import { GROUP_LABEL, homeForRole, routesForRole } from "@/lib/navigation"
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {

@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { CheckCircle2Icon, CircleIcon, UsersIcon } from "lucide-react"
 
 import { Avatar, AvatarFallback } from "@workspace/ui/components/avatar"
@@ -19,36 +20,36 @@ import { ToggleGroup, ToggleGroupItem } from "@workspace/ui/components/toggle-gr
 import { ClosedMonthAlert } from "@/components/closed-month-alert"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { PageHeader } from "@/components/page-header"
+import { QueryError } from "@/components/query-error"
 import { periodOf, todayIso } from "@/lib/dates"
-import { errorMessage } from "@/lib/demo/errors"
-import { useRequiredSession } from "@/lib/demo/session"
-import { activeMembersOn, closedPayoutFor, useDemo, useSimulatedLoading } from "@/lib/demo/store"
 import { formatDate, formatShortDate, initials } from "@/lib/format"
+import { useRequiredSession } from "@/lib/session"
+import { useTRPC } from "@/lib/trpc/client"
+import { errorMessage } from "@/lib/trpc/errors"
+import { useInvalidateAll } from "@/lib/trpc/hooks"
 
 export function AttendanceScreen() {
-  const { data, actions, resetCount } = useDemo()
+  const trpc = useTRPC()
+  const invalidateAll = useInvalidateAll()
   const { session } = useRequiredSession()
   const today = todayIso()
   const [date, setDate] = React.useState(today)
   const [pendingDate, setPendingDate] = React.useState<string | null>(null)
   // Draft edits live only while the user is on the same date; saved data wins otherwise.
   const [draft, setDraft] = React.useState<{ date: string; present: string[] } | null>(null)
-  const [saving, setSaving] = React.useState(false)
-  const savingRef = React.useRef(false)
-  const loading = useSimulatedLoading(`${date}-${resetCount}`)
 
-  const members = React.useMemo(
-    () => activeMembersOn(data.members, date).sort((a, b) => a.name.localeCompare(b.name, "pt-BR")),
-    [data.members, date],
-  )
-  const recorded = React.useMemo(() => data.attendances.filter((a) => a.date === date), [data.attendances, date])
-  const hasRecord = recorded.length > 0
-  const closedPayout = closedPayoutFor(data, periodOf(date))
-  const readOnly = Boolean(closedPayout)
+  const query = useQuery(trpc.attendance.byDate.queryOptions({ date }))
+  const save = useMutation(trpc.attendance.saveDaily.mutationOptions())
 
-  const recordedPresent = React.useMemo(() => recorded.filter((a) => a.present).map((a) => a.memberId), [recorded])
+  const members = React.useMemo(() => query.data?.entries ?? [], [query.data])
+  const hasRecord = query.data?.recorded ?? false
+  const readOnly = query.data?.periodClosed ?? false
+  const loading = query.isPending
+
+  const recordedPresent = React.useMemo(() => members.filter((m) => m.present).map((m) => m.memberId), [members])
   const dirty = draft !== null && draft.date === date
   const present = dirty ? draft.present : recordedPresent
+  const saving = save.isPending
 
   function setPresent(next: string[]) {
     setDraft({ date, present: next })
@@ -61,29 +62,25 @@ export function AttendanceScreen() {
   }
 
   function setAll(value: boolean) {
-    setPresent(value ? members.map((m) => m.id) : [])
+    setPresent(value ? members.map((m) => m.memberId) : [])
   }
 
   async function handleSave() {
-    if (savingRef.current) return // guard against double submit
-    savingRef.current = true
-    setSaving(true)
+    if (saving) return // guard against double submit (NF-004)
     try {
-      const result = await actions.saveAttendance(
+      const result = await save.mutateAsync({
         date,
-        members.map((m) => ({ memberId: m.id, present: present.includes(m.id) })),
-      )
+        entries: members.map((m) => ({ memberId: m.memberId, present: present.includes(m.memberId) })),
+      })
       setDraft(null)
+      await invalidateAll()
       toast.add({
         type: "success",
         title: `Chamada de ${formatShortDate(date)} salva`,
-        description: `${result.present} de ${members.length} presentes.`,
+        description: `${result.presentCount} de ${members.length} presentes.`,
       })
     } catch (error) {
       toast.add({ type: "error", title: "Não foi possível salvar a chamada", description: errorMessage(error) })
-    } finally {
-      savingRef.current = false
-      setSaving(false)
     }
   }
 
@@ -105,7 +102,7 @@ export function AttendanceScreen() {
         </Field>
       </PageHeader>
 
-      {readOnly && <ClosedMonthAlert period={periodOf(date)} payoutId={closedPayout?.id} />}
+      {readOnly && <ClosedMonthAlert period={periodOf(date)} payoutId={query.data?.closedPayoutId ?? undefined} />}
 
       {loading ? (
         <div className="flex flex-col gap-3" aria-busy="true">
@@ -114,6 +111,8 @@ export function AttendanceScreen() {
             <Skeleton key={i} className="h-14 w-full" />
           ))}
         </div>
+      ) : query.isError ? (
+        <QueryError error={query.error} onRetry={() => void query.refetch()} retrying={query.isFetching} title="Não foi possível carregar a chamada" />
       ) : members.length === 0 ? (
         <Empty className="border">
           <EmptyHeader>
@@ -172,20 +171,20 @@ export function AttendanceScreen() {
             aria-label="Lista de presença"
           >
             {members.map((member) => {
-              const isPresent = present.includes(member.id)
+              const isPresent = present.includes(member.memberId)
               return (
                 <ToggleGroupItem
-                  key={member.id}
-                  value={member.id}
+                  key={member.memberId}
+                  value={member.memberId}
                   disabled={readOnly || saving}
                   className="h-14 w-full justify-between px-3 text-base"
-                  aria-label={`${member.name}: ${isPresent ? "presente" : "ausente"}`}
+                  aria-label={`${member.memberName}: ${isPresent ? "presente" : "ausente"}`}
                 >
                   <span className="flex min-w-0 items-center gap-3">
                     <Avatar>
-                      <AvatarFallback>{initials(member.name)}</AvatarFallback>
+                      <AvatarFallback>{initials(member.memberName)}</AvatarFallback>
                     </Avatar>
-                    <span className="truncate">{member.name}</span>
+                    <span className="truncate">{member.memberName}</span>
                   </span>
                   {isPresent ? (
                     <Badge>

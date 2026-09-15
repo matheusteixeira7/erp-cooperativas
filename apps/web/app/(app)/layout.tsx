@@ -3,7 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { ShieldAlertIcon } from "lucide-react"
+import { RefreshCwIcon, ShieldAlertIcon, WifiOffIcon } from "lucide-react"
 
 import { Button } from "@workspace/ui/components/button"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@workspace/ui/components/empty"
@@ -13,21 +13,51 @@ import { Skeleton } from "@workspace/ui/components/skeleton"
 import { AppHeader } from "@/components/app-header"
 import { AppSidebar } from "@/components/app-sidebar"
 import { ShellProvider } from "@/components/shell-context"
-import { useSession } from "@/lib/demo/session"
 import { canAccess, homeForRole } from "@/lib/navigation"
+import { useSession } from "@/lib/session"
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const { session } = useSession()
+  const { session, error, refresh } = useSession()
   const router = useRouter()
   const pathname = usePathname()
+  const [retrying, setRetrying] = React.useState(false)
 
   React.useEffect(() => {
     if (session === null) router.replace("/login")
   }, [session, router])
 
+  if (error && session === undefined) {
+    return (
+      <div className="flex min-h-svh items-center justify-center p-6">
+        <Empty className="max-w-md border">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <WifiOffIcon />
+            </EmptyMedia>
+            <EmptyTitle>Sem conexão com o servidor</EmptyTitle>
+            <EmptyDescription>{error}</EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button
+              onClick={async () => {
+                setRetrying(true)
+                await refresh()
+                setRetrying(false)
+              }}
+              disabled={retrying}
+            >
+              <RefreshCwIcon data-icon="inline-start" className={retrying ? "animate-spin" : undefined} />
+              Tentar de novo
+            </Button>
+          </EmptyContent>
+        </Empty>
+      </div>
+    )
+  }
+
   if (!session) {
     return (
-      <div className="flex min-h-svh">
+      <div className="flex min-h-svh" aria-busy="true">
         <div className="hidden w-64 flex-col gap-3 border-r p-4 md:flex">
           <Skeleton className="h-10 w-full" />
           <Skeleton className="h-6 w-3/4" />

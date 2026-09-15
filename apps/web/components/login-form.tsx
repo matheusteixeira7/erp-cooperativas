@@ -7,33 +7,31 @@ import { RecycleIcon, TriangleAlertIcon } from "lucide-react"
 
 import { Alert, AlertDescription, AlertTitle } from "@workspace/ui/components/alert"
 import { Button } from "@workspace/ui/components/button"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@workspace/ui/components/card"
-import {
-  Field,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-  FieldSeparator,
-} from "@workspace/ui/components/field"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import { Field, FieldDescription, FieldGroup, FieldLabel, FieldSeparator } from "@workspace/ui/components/field"
 import { Input } from "@workspace/ui/components/input"
 import { Spinner } from "@workspace/ui/components/spinner"
 
-import { errorMessage } from "@/lib/demo/errors"
-import { DEMO_PASSWORD, DEMO_USERS } from "@/lib/demo/seed"
-import { useSession } from "@/lib/demo/session"
-import { ROLE_LABEL, type Role } from "@/lib/demo/types"
+import { ROLE_LABEL, type Role } from "@/lib/domain/enums"
 import { homeForRole } from "@/lib/navigation"
+import { useSession } from "@/lib/session"
+import { errorMessage } from "@/lib/trpc/errors"
+
+/**
+ * Accounts created by `pnpm --filter web db:seed`. Only shown in development,
+ * where the seed is the expected dataset.
+ */
+const DEMO_ACCOUNTS: { role: Role; email: string; label: string }[] = [
+  { role: "manager", email: "marta@reciclavida.coop", label: "Gestor + Operador" },
+  { role: "operator", email: "jorge@reciclavida.coop", label: "Operador" },
+  { role: "member", email: "ana@reciclavida.coop", label: "Cooperado" },
+]
+const DEMO_PASSWORD = "demo123"
+const SHOW_DEMO = process.env.NODE_ENV === "development"
 
 export function LoginForm() {
   const router = useRouter()
-  const { session, login, loginAs } = useSession()
+  const { session, login } = useSession()
   const [email, setEmail] = React.useState("")
   const [password, setPassword] = React.useState("")
   const [pending, setPending] = React.useState<"form" | Role | null>(null)
@@ -43,12 +41,11 @@ export function LoginForm() {
     if (session) router.replace(homeForRole(session.activeRole))
   }, [session, router])
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
+  async function submit(credentials: { email: string; password: string }, who: "form" | Role) {
     setError(null)
-    setPending("form")
+    setPending(who)
     try {
-      const next = await login(email, password)
+      const next = await login(credentials.email, credentials.password)
       router.replace(homeForRole(next.activeRole))
     } catch (err) {
       setError(errorMessage(err))
@@ -56,16 +53,9 @@ export function LoginForm() {
     }
   }
 
-  async function handleQuickLogin(role: Role) {
-    setError(null)
-    setPending(role)
-    try {
-      const next = await loginAs(role)
-      router.replace(homeForRole(next.activeRole))
-    } catch (err) {
-      setError(errorMessage(err))
-      setPending(null)
-    }
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    await submit({ email, password }, "form")
   }
 
   const busy = pending !== null
@@ -128,22 +118,28 @@ export function LoginForm() {
                   Entrar
                 </Button>
               </Field>
-              <FieldSeparator>ou acesse como</FieldSeparator>
+              {SHOW_DEMO && (
+                <>
+                  <FieldSeparator>ou acesse como</FieldSeparator>
+                  <Field>
+                    <div className="grid grid-cols-3 gap-2">
+                      {DEMO_ACCOUNTS.map((account) => (
+                        <Button
+                          key={account.role}
+                          type="button"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() => submit({ email: account.email, password: DEMO_PASSWORD }, account.role)}
+                        >
+                          {pending === account.role ? <Spinner data-icon="inline-start" /> : null}
+                          {ROLE_LABEL[account.role]}
+                        </Button>
+                      ))}
+                    </div>
+                  </Field>
+                </>
+              )}
               <Field>
-                <div className="grid grid-cols-3 gap-2">
-                  {(["manager", "operator", "member"] as Role[]).map((role) => (
-                    <Button
-                      key={role}
-                      type="button"
-                      variant="outline"
-                      disabled={busy}
-                      onClick={() => handleQuickLogin(role)}
-                    >
-                      {pending === role ? <Spinner data-icon="inline-start" /> : null}
-                      {ROLE_LABEL[role]}
-                    </Button>
-                  ))}
-                </div>
                 <FieldDescription className="text-center">
                   Ainda não tem conta?{" "}
                   <Link href="/signup" className="underline underline-offset-4 hover:text-primary">
@@ -154,22 +150,25 @@ export function LoginForm() {
             </FieldGroup>
           </form>
         </CardContent>
-        <CardFooter>
-          <details className="w-full text-xs text-muted-foreground">
-            <summary className="cursor-pointer select-none">Contas de demonstração</summary>
-            <ul className="mt-2 flex flex-col gap-1">
-              {DEMO_USERS.map((user) => (
-                <li key={user.id} className="flex justify-between gap-2">
-                  <span className="truncate">{user.email}</span>
-                  <span className="shrink-0">{user.roles.map((r) => ROLE_LABEL[r]).join(" + ")}</span>
+        {SHOW_DEMO && (
+          <CardFooter>
+            <details className="w-full text-xs text-muted-foreground">
+              <summary className="cursor-pointer select-none">Contas de demonstração (banco local)</summary>
+              <ul className="mt-2 flex flex-col gap-1">
+                {DEMO_ACCOUNTS.map((account) => (
+                  <li key={account.email} className="flex justify-between gap-2">
+                    <span className="truncate">{account.email}</span>
+                    <span className="shrink-0">{account.label}</span>
+                  </li>
+                ))}
+                <li className="mt-1">
+                  Senha para todas: <code className="font-mono">{DEMO_PASSWORD}</code>. Crie os dados com{" "}
+                  <code className="font-mono">pnpm --filter web db:seed</code>.
                 </li>
-              ))}
-              <li className="mt-1">
-                Senha para todas: <code className="font-mono">{DEMO_PASSWORD}</code>
-              </li>
-            </ul>
-          </details>
-        </CardFooter>
+              </ul>
+            </details>
+          </CardFooter>
+        )}
       </Card>
     </div>
   )

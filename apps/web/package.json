@@ -15,12 +15,16 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "db:seed": "tsx server/db/seed.ts",
+    "db:setup": "drizzle-kit migrate && tsx server/db/seed.ts"
   },
   "dependencies": {
     "@t3-oss/env-nextjs": "^0.13.11",
+    "@tanstack/react-query": "^5.102.8",
     "@trpc/client": "^11.18.0",
     "@trpc/server": "^11.18.0",
+    "@trpc/tanstack-react-query": "^11.18.0",
     "@workspace/ui": "workspace:*",
     "date-fns": "4.4.0",
     "drizzle-orm": "^0.45.2",
@@ -47,6 +51,7 @@
     "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "jsdom": "^30.0.1",
+    "tsx": "^4.23.13",
     "typescript": "^5",
     "vitest": "^4.1.11"
   }

@@ -13,7 +13,7 @@ import {
   UsersIcon,
 } from "lucide-react"
 
-import type { Role } from "@/lib/demo/types"
+import type { Role } from "@/lib/domain/enums"
 
 export type AppRoute = {
   href: string
