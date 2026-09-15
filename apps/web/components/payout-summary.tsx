@@ -14,6 +14,7 @@ import type { PayoutSettings } from "@/lib/domain/payout"
 
 export type PayoutTotals = {
   grossRevenue: number
+  totalPurchases: number
   totalExpenses: number
   surplus: number
   legalReserveAmount: number
@@ -51,9 +52,10 @@ export function PayoutSummaryCards({
 }) {
   const t = totals
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
       <StatCard loading={loading} label="Receita de vendas" value={t ? formatMoney(t.grossRevenue) : "—"} hint="Vendas do mês, pela data da venda" />
-      <StatCard loading={loading} label="Despesas" value={t ? formatMoney(t.totalExpenses) : "—"} hint={t ? `Sobra: ${formatMoney(t.surplus)}` : undefined} />
+      <StatCard loading={loading} label="Compras de material" value={t ? `− ${formatMoney(t.totalPurchases)}` : "—"} hint="Material comprado de catadores e cooperativas" />
+      <StatCard loading={loading} label="Despesas" value={t ? `− ${formatMoney(t.totalExpenses)}` : "—"} hint={t ? `Sobra: ${formatMoney(t.surplus)}` : "Sobra = vendas − compras − despesas"} />
       <StatCard
         loading={loading}
         label="Fundos legais"

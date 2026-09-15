@@ -15,7 +15,9 @@ import type {
   Member,
   Payout,
   PayoutSettingsVersion,
+  Purchase,
   Sale,
+  Supplier,
 } from "./types"
 
 export const COOPERATIVE_NAME = "Cooperativa Recicla Vida"
@@ -63,6 +65,12 @@ const buyers: Buyer[] = [
   { id: "b1", name: "Reciclagem Indústria X", cnpj: "12345678000190", contact: "Sr. Antônio · (11) 4002-8922", active: true },
   { id: "b2", name: "Metalúrgica Sul", cnpj: "98765432000110", contact: "Dona Cléia · (11) 3333-1010", active: true },
   { id: "b3", name: "Papéis do Vale", cnpj: "45678912000155", contact: "Marcos · (12) 3922-5544", active: true },
+]
+
+const suppliers: Supplier[] = [
+  { id: "sup-ze", kind: "individual", name: "José Carlos (Seu Zé, catador)", cpf: "39053344705", cnpj: "", pixKey: "+5511988887777", phone: "11988887777", active: true },
+  { id: "sup-dona-lu", kind: "individual", name: "Luzia Andrade (catadora)", cpf: "", cnpj: "", pixKey: "", phone: "11977776666", active: true },
+  { id: "sup-coop-vizinha", kind: "company", name: "Cooperativa Vizinha Recicla", cpf: "", cnpj: "23456789000101", pixKey: "financeiro@coopvizinha.org", phone: "1133334444", active: true },
 ]
 
 const materialTypes: MaterialType[] = [
@@ -148,6 +156,52 @@ const sales: Sale[] = [
   buildSale({ id: "s-set-1", buyerId: "b3", soldOn: "2026-09-04", items: [
     { materialTypeId: "mt-papelao", weightKg: 5000, pricePerKg: 0.7 },
     { materialTypeId: "mt-papel-misto", weightKg: 1500, pricePerKg: 0.45 },
+  ] }),
+]
+
+type SeedPurchase = {
+  id: string
+  supplierId: string
+  purchasedOn: string
+  paymentMethod: Purchase["paymentMethod"]
+  paidOn: string | null
+  items: { materialTypeId: string; condition?: MaterialCondition; weightKg: number; pricePerKg: number }[]
+}
+
+function buildPurchase(seed: SeedPurchase): Purchase {
+  const items = seed.items.map((item, index) => ({
+    id: `${seed.id}-i${index + 1}`,
+    materialTypeId: item.materialTypeId,
+    // Material comprado de catador chega solto, salvo indicação contrária.
+    condition: item.condition ?? "loose",
+    weightKg: item.weightKg,
+    pricePerKg: item.pricePerKg,
+    subtotal: itemSubtotal(item.weightKg, item.pricePerKg),
+  }))
+  return {
+    id: seed.id,
+    supplierId: seed.supplierId,
+    purchasedOn: seed.purchasedOn,
+    items,
+    totalAmount: Math.round(items.reduce((sum, i) => sum + i.subtotal, 0) * 100) / 100,
+    totalWeightKg: items.reduce((sum, i) => sum + i.weightKg, 0),
+    paymentMethod: seed.paymentMethod,
+    paidOn: seed.paidOn,
+    note: "",
+    deletedAt: null,
+    createdBy: "u-jorge",
+    createdAt: `${seed.purchasedOn}T08:45:00`,
+  }
+}
+
+// Agosto/2026 não tem compras de propósito: os números batem com FX-ago-2026-com-fundos.
+const purchases: Purchase[] = [
+  buildPurchase({ id: "pu-set-1", supplierId: "sup-ze", purchasedOn: "2026-09-02", paymentMethod: "cash", paidOn: "2026-09-02", items: [
+    { materialTypeId: "mt-papelao", weightKg: 800, pricePerKg: 0.3 },
+    { materialTypeId: "mt-pet-cristal", weightKg: 120, pricePerKg: 1.5 },
+  ] }),
+  buildPurchase({ id: "pu-set-2", supplierId: "sup-coop-vizinha", purchasedOn: "2026-09-08", paymentMethod: "pix", paidOn: null, items: [
+    { materialTypeId: "mt-pet-cristal", weightKg: 500, pricePerKg: 1.8 },
   ] }),
 ]
 
@@ -301,6 +355,7 @@ const payouts: Payout[] = [
     period: "2026-07",
     status: "closed",
     grossRevenue: 41200,
+    totalPurchases: 0,
     totalExpenses: 11900,
     surplus: 29300,
     legalReserveAmount: 2930,
@@ -342,8 +397,10 @@ export function createSeed(): DemoData {
   return structuredClone({
     members,
     buyers,
+    suppliers,
     materialTypes,
     sales,
+    purchases,
     expenses,
     advances,
     attendances,

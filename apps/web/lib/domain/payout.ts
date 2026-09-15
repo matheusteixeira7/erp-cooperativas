@@ -23,6 +23,8 @@ export const LEGAL_DEFAULT_SETTINGS: PayoutSettings = {
 export type PayoutInput = {
   period: string
   sales: { soldOn: string; totalAmount: number; deletedAt?: string | null }[]
+  /** Compras de material (RN-003). Opcional para chamadas antigas. */
+  purchases?: { purchasedOn: string; totalAmount: number; deletedAt?: string | null }[]
   expenses: { incurredOn: string; amount: number; deletedAt?: string | null }[]
   attendances: { memberId: string; date: string; present: boolean }[]
   members: { id: string; name: string; admittedOn: string; leftOn?: string | null }[]
@@ -44,6 +46,7 @@ export type PayoutItemResult = {
 export type PayoutResult = {
   period: string
   grossRevenue: number
+  totalPurchases: number
   totalExpenses: number
   surplus: number
   legalReserveAmount: number
@@ -65,7 +68,7 @@ export type PayoutErrorCode = "NO_SURPLUS" | "NO_ATTENDANCE"
 
 export type SimulationOutcome =
   | { ok: true; result: PayoutResult }
-  | { ok: false; code: PayoutErrorCode; details: { grossRevenue: number; totalExpenses: number; surplus: number } }
+  | { ok: false; code: PayoutErrorCode; details: { grossRevenue: number; totalPurchases: number; totalExpenses: number; surplus: number } }
 
 export function toCents(value: number) {
   return Math.round(value * 100)
@@ -98,13 +101,18 @@ export function simulatePayout(input: PayoutInput): SimulationOutcome {
   const grossRevenueCents = input.sales
     .filter((s) => !s.deletedAt && isInPeriod(s.soldOn, period))
     .reduce((sum, s) => sum + toCents(s.totalAmount), 0)
+  const totalPurchasesCents = (input.purchases ?? [])
+    .filter((p) => !p.deletedAt && isInPeriod(p.purchasedOn, period))
+    .reduce((sum, p) => sum + toCents(p.totalAmount), 0)
   const totalExpensesCents = input.expenses
     .filter((e) => !e.deletedAt && isInPeriod(e.incurredOn, period))
     .reduce((sum, e) => sum + toCents(e.amount), 0)
-  const surplusCents = grossRevenueCents - totalExpensesCents
+  // RN-003: surplus = sales − material purchases − operating expenses.
+  const surplusCents = grossRevenueCents - totalPurchasesCents - totalExpensesCents
 
   const details = {
     grossRevenue: fromCents(grossRevenueCents),
+    totalPurchases: fromCents(totalPurchasesCents),
     totalExpenses: fromCents(totalExpensesCents),
     surplus: fromCents(surplusCents),
   }
@@ -214,6 +222,7 @@ export function simulatePayout(input: PayoutInput): SimulationOutcome {
     result: {
       period,
       grossRevenue: fromCents(grossRevenueCents),
+      totalPurchases: fromCents(totalPurchasesCents),
       totalExpenses: fromCents(totalExpensesCents),
       surplus: fromCents(surplusCents),
       legalReserveAmount: fromCents(legalReserveCents),

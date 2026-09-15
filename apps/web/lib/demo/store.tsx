@@ -24,9 +24,13 @@ import type {
   ExpenseCategory,
   MaterialCondition,
   Member,
+  PaymentMethod,
   Payout,
   PayoutSettingsVersion,
+  Purchase,
   Sale,
+  Supplier,
+  SupplierKind,
 } from "@/lib/demo/types"
 
 const LATENCY_MS = 650
@@ -110,6 +114,16 @@ export function lastPricePerKg(data: DemoData, query: LastPriceQuery): { pricePe
       }
     }
   }
+  if (query.supplierId) {
+    for (const purchase of data.purchases) {
+      if (purchase.deletedAt || purchase.supplierId !== query.supplierId) continue
+      for (const item of purchase.items) {
+        if (item.materialTypeId === query.materialTypeId && item.condition === query.condition) {
+          candidates.push({ on: purchase.purchasedOn, createdAt: purchase.createdAt, pricePerKg: item.pricePerKg })
+        }
+      }
+    }
+  }
   candidates.sort((a, b) => b.on.localeCompare(a.on) || b.createdAt.localeCompare(a.createdAt))
   const latest = candidates[0]
   return latest ? { pricePerKg: latest.pricePerKg, on: latest.on } : null
@@ -119,6 +133,7 @@ export function runSimulation(data: DemoData, period: string): SimulationOutcome
   return simulatePayout({
     period,
     sales: data.sales,
+    purchases: data.purchases,
     expenses: data.expenses,
     attendances: data.attendances,
     members: data.members,
@@ -130,6 +145,7 @@ export function runSimulation(data: DemoData, period: string): SimulationOutcome
 // ---------- Store ----------
 
 export type SaleDraftItem = { materialTypeId: string; condition: MaterialCondition; weightKg: number; pricePerKg: number }
+export type PurchaseDraftItem = SaleDraftItem
 
 type Actor = { userId: string; name: string }
 
@@ -138,6 +154,13 @@ export type DemoActions = {
   createBuyer(input: { name: string; cnpj: string; contact: string }): Promise<Buyer>
   createSale(input: { buyerId: string; soldOn: string; items: SaleDraftItem[]; invoiceNumber: string; note: string }, actor: Actor): Promise<Sale>
   deleteSale(id: string): Promise<void>
+  /** Fornecedor com o mesmo CPF/CNPJ já cadastrado é devolvido em vez de duplicado. */
+  createSupplier(input: { kind: SupplierKind; name: string; cpf: string; cnpj: string; pixKey: string; phone: string }): Promise<Supplier>
+  createPurchase(
+    input: { supplierId: string; purchasedOn: string; items: PurchaseDraftItem[]; paymentMethod: PaymentMethod; paidOn: string | null; note: string },
+    actor: Actor,
+  ): Promise<Purchase>
+  deletePurchase(id: string): Promise<void>
   createExpense(input: { description: string; category: ExpenseCategory; amount: number; incurredOn: string }, actor: Actor): Promise<Expense>
   deleteExpense(id: string): Promise<void>
   createAdvance(input: { memberId: string; kind: AdvanceKind; description: string; amount: number; grantedOn: string }, actor: Actor): Promise<Advance>
@@ -276,6 +299,73 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
         })
       },
 
+      async createSupplier(input) {
+        return run((current) => {
+          const cpf = input.kind === "individual" ? input.cpf.replace(/\D/g, "") : ""
+          const cnpj = input.kind === "company" ? input.cnpj.replace(/\D/g, "") : ""
+          const existing = current.suppliers.find((s) => (cpf && s.cpf === cpf) || (cnpj && s.cnpj === cnpj))
+          if (existing) return { next: current, result: existing }
+          if (input.kind === "company" && cnpj.length !== 14) throw new DemoError("ERR-VAL-001")
+          const supplier: Supplier = {
+            id: newId("sup"),
+            kind: input.kind,
+            name: input.name.trim(),
+            cpf,
+            cnpj,
+            pixKey: input.pixKey.trim(),
+            phone: input.phone.replace(/\D/g, ""),
+            active: true,
+          }
+          return { next: { ...current, suppliers: [...current.suppliers, supplier] }, result: supplier }
+        })
+      },
+
+      async createPurchase(input, actor) {
+        return run((current) => {
+          assertOpen(current, input.purchasedOn)
+          if (input.items.length === 0) throw new DemoError("ERR-PURCHASE-001")
+          if (!current.suppliers.some((s) => s.id === input.supplierId && s.active)) throw new DemoError("ERR-PURCHASE-002")
+          if (input.items.some((item) => !current.materialTypes.some((m) => m.id === item.materialTypeId))) throw new DemoError("ERR-PURCHASE-002")
+          if (input.items.some((item) => item.weightKg <= 0 || item.pricePerKg <= 0)) throw new DemoError("ERR-VAL-001")
+          const id = newId("pu")
+          const items = input.items.map((item, index) => ({
+            id: `${id}-i${index + 1}`,
+            materialTypeId: item.materialTypeId,
+            condition: item.condition,
+            weightKg: item.weightKg,
+            pricePerKg: item.pricePerKg,
+            subtotal: itemSubtotal(item.weightKg, item.pricePerKg),
+          }))
+          const purchase: Purchase = {
+            id,
+            supplierId: input.supplierId,
+            purchasedOn: input.purchasedOn,
+            items,
+            totalAmount: round2(items.reduce((sum, i) => sum + i.subtotal, 0)),
+            totalWeightKg: round2(items.reduce((sum, i) => sum + i.weightKg, 0)),
+            paymentMethod: input.paymentMethod,
+            paidOn: input.paidOn,
+            note: input.note.trim(),
+            deletedAt: null,
+            createdBy: actor.userId,
+            createdAt: nowIso(),
+          }
+          return { next: { ...current, purchases: [purchase, ...current.purchases] }, result: purchase }
+        })
+      },
+
+      async deletePurchase(id) {
+        return run((current) => {
+          const purchase = current.purchases.find((p) => p.id === id && !p.deletedAt)
+          if (!purchase) throw new DemoError("ERR-PURCHASE-003")
+          assertOpen(current, purchase.purchasedOn)
+          return {
+            next: { ...current, purchases: current.purchases.map((p) => (p.id === id ? { ...p, deletedAt: nowIso() } : p)) },
+            result: undefined,
+          }
+        })
+      },
+
       async createExpense(input, actor) {
         return run((current) => {
           assertOpen(current, input.incurredOn)
@@ -390,6 +480,7 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
             period,
             status: "closed",
             grossRevenue: result.grossRevenue,
+            totalPurchases: result.totalPurchases,
             totalExpenses: result.totalExpenses,
             surplus: result.surplus,
             legalReserveAmount: result.legalReserveAmount,

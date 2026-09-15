@@ -26,7 +26,7 @@ export type AppRoute = {
 export const APP_ROUTES: AppRoute[] = [
   { href: "/inicio", label: "Início", icon: HomeIcon, roles: ["manager", "operator"], group: "operacao" },
   { href: "/chamada", label: "Chamada", icon: UserCheckIcon, roles: ["manager", "operator"], group: "operacao" },
-  { href: "/vendas", label: "Vendas", icon: ShoppingCartIcon, roles: ["manager", "operator"], group: "operacao" },
+  { href: "/vendas", label: "Vendas e compras", icon: ShoppingCartIcon, roles: ["manager", "operator"], group: "operacao" },
   { href: "/financeiro", label: "Despesas e vales", icon: CreditCardIcon, roles: ["manager", "operator"], group: "operacao" },
   { href: "/fechamento", label: "Fechamento", icon: DollarSignIcon, roles: ["manager"], group: "gestao" },
   { href: "/fechamento/historico", label: "Histórico", icon: HistoryIcon, roles: ["manager"], group: "gestao" },

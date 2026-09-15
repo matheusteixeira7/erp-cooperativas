@@ -137,7 +137,7 @@ export function PayoutScreen() {
             </EmptyTitle>
             <EmptyDescription>
               {outcome.code === "NO_SURPLUS"
-                ? `Em ${formatPeriod(period)} a receita foi ${formatMoney(outcome.details.grossRevenue)} e as despesas ${formatMoney(outcome.details.totalExpenses)} (sobra ${formatMoney(outcome.details.surplus)}). Confira se faltou lançar alguma venda ou se há despesa lançada errada.`
+                ? `Em ${formatPeriod(period)} a receita foi ${formatMoney(outcome.details.grossRevenue)}, as compras de material ${formatMoney(outcome.details.totalPurchases)} e as despesas ${formatMoney(outcome.details.totalExpenses)} (sobra ${formatMoney(outcome.details.surplus)}). Confira se faltou lançar alguma venda ou se há compra ou despesa lançada errada.`
                 : `Não existe chamada em ${formatPeriod(period)}. Sem dias trabalhados não é possível calcular a diária.`}
             </EmptyDescription>
           </EmptyHeader>

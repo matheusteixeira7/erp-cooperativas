@@ -81,6 +81,31 @@ describe("simulatePayout", () => {
     expect(ana?.netAmount).toBe(4500.96)
   })
 
+  it("compras de material reduzem a sobra em linha própria (RN-003)", () => {
+    const input = buildInput()
+    input.purchases = [
+      { purchasedOn: "2026-08-03", totalAmount: 1500 },
+      { purchasedOn: "2026-08-10", totalAmount: 999, deletedAt: "2026-08-11T00:00:00" }, // excluída: não conta
+      { purchasedOn: "2026-09-01", totalAmount: 999 }, // outro mês: não conta
+    ]
+    const outcome = simulatePayout(input)
+    expect(outcome.ok).toBe(true)
+    if (!outcome.ok) return
+    expect(outcome.result.totalPurchases).toBe(1500)
+    expect(outcome.result.totalExpenses).toBe(12300)
+    expect(outcome.result.surplus).toBe(34700)
+    // fundos: 3470 + 1735 → distribuível 29495
+    expect(outcome.result.distributableSurplus).toBe(29495)
+  })
+
+  it("sem compras, totalPurchases é zero e nada muda", () => {
+    const outcome = simulatePayout(buildInput())
+    expect(outcome.ok).toBe(true)
+    if (!outcome.ok) return
+    expect(outcome.result.totalPurchases).toBe(0)
+    expect(outcome.result.surplus).toBe(36200)
+  })
+
   it("retorna NO_SURPLUS quando despesas superam vendas (RN-004)", () => {
     const input = buildInput()
     input.sales = []

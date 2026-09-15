@@ -26,7 +26,6 @@ import {
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@workspace/ui/components/empty"
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@workspace/ui/components/field"
 import { Input } from "@workspace/ui/components/input"
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@workspace/ui/components/select"
 import { Spinner } from "@workspace/ui/components/spinner"
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@workspace/ui/components/table"
 import { toast } from "@workspace/ui/components/toast"
@@ -34,21 +33,16 @@ import { ToggleGroup, ToggleGroupItem } from "@workspace/ui/components/toggle-gr
 
 import { ClosedMonthAlert } from "@/components/closed-month-alert"
 import { ConfirmDialog } from "@/components/confirm-dialog"
+import { MaterialSelect } from "@/components/material-select"
 import { PageHeader } from "@/components/page-header"
+import { PurchasesSection } from "@/components/screens/purchases-section"
 import { PeriodSelect } from "@/components/period-select"
 import { TableSkeleton } from "@/components/table-skeleton"
 import { currentPeriod, isInPeriod, periodOf, todayIso } from "@/lib/dates"
 import { errorMessage } from "@/lib/demo/errors"
 import { useRequiredSession } from "@/lib/demo/session"
 import { closedPayoutFor, lastPricePerKg, useDemo, useSimulatedLoading, type SaleDraftItem } from "@/lib/demo/store"
-import {
-  MATERIAL_CATEGORY_LABEL,
-  MATERIAL_CONDITION_LABEL,
-  type Buyer,
-  type MaterialCategory,
-  type MaterialCondition,
-  type Sale,
-} from "@/lib/demo/types"
+import { MATERIAL_CONDITION_LABEL, type Buyer, type MaterialCondition, type Sale } from "@/lib/demo/types"
 import { itemSubtotal } from "@/lib/domain/payout"
 import { formatDate, formatMoney, formatPricePerKg, formatShortDate, formatWeight, parseDecimal } from "@/lib/format"
 import { useActor } from "@/lib/use-actor"
@@ -92,7 +86,6 @@ export function SalesScreen() {
   const listClosed = closedPayoutFor(data, period)
   const activeBuyers = data.buyers.filter((b) => b.active)
   const activeMaterials = data.materialTypes.filter((m) => m.active)
-  const materialItems = activeMaterials.map((m) => ({ value: m.id, label: m.name }))
   const materialName = (id: string) => data.materialTypes.find((m) => m.id === id)?.name ?? "—"
   const buyerName = (id: string) => data.buyers.find((b) => b.id === id)?.name ?? "—"
   const conditionLabel = (value: MaterialCondition) => MATERIAL_CONDITION_LABEL[value].toLowerCase()
@@ -182,7 +175,7 @@ export function SalesScreen() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Vendas" description="Registre a saída de material pesado para o comprador." />
+      <PageHeader title="Vendas e compras" description="Em cima, a saída de material para o comprador. Embaixo, o material comprado de catadores e outras cooperativas." />
 
       <Card>
         <CardHeader>
@@ -245,8 +238,9 @@ export function SalesScreen() {
               <div className="grid gap-3 md:grid-cols-[2fr_auto_1fr_1fr_auto] md:items-start">
                 <Field data-invalid={itemErrors.material ? true : undefined}>
                   <FieldLabel htmlFor="sale-material">Material</FieldLabel>
-                  <Select
-                    items={materialItems}
+                  <MaterialSelect
+                    id="sale-material"
+                    materials={activeMaterials}
                     value={materialTypeId}
                     onValueChange={(value) => {
                       setMaterialTypeId(value)
@@ -255,27 +249,8 @@ export function SalesScreen() {
                       setItemErrors((e) => ({ ...e, material: undefined }))
                     }}
                     disabled={disabledForm}
-                  >
-                    <SelectTrigger id="sale-material" className="w-full" aria-invalid={itemErrors.material ? true : undefined}>
-                      <SelectValue placeholder="Escolha o material" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(Object.keys(MATERIAL_CATEGORY_LABEL) as MaterialCategory[])
-                        .filter((category) => activeMaterials.some((m) => m.category === category))
-                        .map((category) => (
-                          <SelectGroup key={category}>
-                            <SelectLabel>{MATERIAL_CATEGORY_LABEL[category]}</SelectLabel>
-                            {activeMaterials
-                              .filter((m) => m.category === category)
-                              .map((m) => (
-                                <SelectItem key={m.id} value={m.id}>
-                                  {m.name}
-                                </SelectItem>
-                              ))}
-                          </SelectGroup>
-                        ))}
-                    </SelectContent>
-                  </Select>
+                    invalid={Boolean(itemErrors.material)}
+                  />
                   <FieldError>{itemErrors.material}</FieldError>
                 </Field>
                 <Field>
@@ -527,6 +502,14 @@ export function SalesScreen() {
           )}
         </CardContent>
       </Card>
+
+      <div className="flex items-center gap-3 pt-2">
+        <div className="h-px flex-1 bg-border" />
+        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Compras</span>
+        <div className="h-px flex-1 bg-border" />
+      </div>
+
+      <PurchasesSection />
 
       <NewBuyerDialog
         open={newBuyerOpen}
