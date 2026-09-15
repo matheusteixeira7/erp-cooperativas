@@ -34,6 +34,7 @@ export function AttendanceScreen() {
   // Draft edits live only while the user is on the same date; saved data wins otherwise.
   const [draft, setDraft] = React.useState<{ date: string; present: string[] } | null>(null)
   const [saving, setSaving] = React.useState(false)
+  const savingRef = React.useRef(false)
   const loading = useSimulatedLoading(`${date}-${resetCount}`)
 
   const members = React.useMemo(
@@ -64,6 +65,8 @@ export function AttendanceScreen() {
   }
 
   async function handleSave() {
+    if (savingRef.current) return // guard against double submit
+    savingRef.current = true
     setSaving(true)
     try {
       const result = await actions.saveAttendance(
@@ -79,6 +82,7 @@ export function AttendanceScreen() {
     } catch (error) {
       toast.add({ type: "error", title: "Não foi possível salvar a chamada", description: errorMessage(error) })
     } finally {
+      savingRef.current = false
       setSaving(false)
     }
   }

@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { RecycleIcon, TriangleAlertIcon } from "lucide-react"
 
 import { Alert, AlertDescription, AlertTitle } from "@workspace/ui/components/alert"
@@ -144,7 +145,10 @@ export function LoginForm() {
                   ))}
                 </div>
                 <FieldDescription className="text-center">
-                  Protótipo com dados simulados. Nada é enviado a um servidor.
+                  Ainda não tem conta?{" "}
+                  <Link href="/signup" className="underline underline-offset-4 hover:text-primary">
+                    Criar cooperativa
+                  </Link>
                 </FieldDescription>
               </Field>
             </FieldGroup>

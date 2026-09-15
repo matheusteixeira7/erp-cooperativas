@@ -29,52 +29,6 @@ import type {
 } from "@/lib/demo/types"
 
 const LATENCY_MS = 650
-const DATA_KEY = "erp-cooperativas.demo-data"
-/** Bump when the seed changes so stale browser data is discarded. */
-const SEED_VERSION = 1
-
-// --- localStorage-backed external store (SSR safe via useSyncExternalStore) ---
-
-const listeners = new Set<() => void>()
-
-function subscribe(listener: () => void) {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
-}
-
-function getSnapshot(): string | null {
-  try {
-    return window.localStorage.getItem(DATA_KEY)
-  } catch {
-    return null
-  }
-}
-
-function getServerSnapshot(): string | null {
-  return null
-}
-
-function persist(data: DemoData | null) {
-  try {
-    if (data) window.localStorage.setItem(DATA_KEY, JSON.stringify({ v: SEED_VERSION, data }))
-    else window.localStorage.removeItem(DATA_KEY)
-  } catch {
-    // storage full or unavailable: keep going in memory
-  }
-  listeners.forEach((listener) => listener())
-}
-
-function parseStored(raw: string | null): DemoData | null {
-  if (!raw) return null
-  try {
-    const parsed = JSON.parse(raw) as { v?: number; data?: DemoData }
-    return parsed.v === SEED_VERSION && parsed.data ? parsed.data : null
-  } catch {
-    return null
-  }
-}
 
 function wait(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms))
@@ -181,26 +135,23 @@ type DemoContextValue = {
 const DemoContext = React.createContext<DemoContextValue | null>(null)
 
 export function DemoProvider({ children }: { children: React.ReactNode }) {
-  const [seed] = React.useState<DemoData>(() => createSeed())
-  const raw = React.useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
-  const data = React.useMemo(() => parseStored(raw) ?? seed, [raw, seed])
-  // In-memory fallback used when localStorage is unavailable.
-  const [memory, setMemory] = React.useState<DemoData | null>(null)
-  const effective = raw === null && memory ? memory : data
-  const setData = React.useCallback((next: DemoData) => {
-    setMemory(next)
-    persist(next)
-  }, [])
-  const [failNext, setFailNext] = React.useState(false)
+  // Pure in-memory store. Client-side navigation (sidebar links) preserves it;
+  // a hard page reload resets to the seed, which is the expected prototype behavior.
+  const [data, setData] = React.useState<DemoData>(() => createSeed())
+  const [failNext, setFailNextState] = React.useState(false)
   const [resetCount, setResetCount] = React.useState(0)
-  const dataRef = React.useRef(effective)
+  // dataRef mirrors the latest committed data so async mutations read fresh state.
+  // Writing it during render is the intended pattern for a "latest value" ref.
+  const dataRef = React.useRef(data)
+  // eslint-disable-next-line react-hooks/refs
+  dataRef.current = data
+  // failRef is written synchronously by setFailNext so a mutation started right after
+  // the toggle reads the new value without waiting for a render.
   const failRef = React.useRef(failNext)
-  React.useEffect(() => {
-    dataRef.current = effective
-  }, [effective])
-  React.useEffect(() => {
-    failRef.current = failNext
-  }, [failNext])
+  const setFailNext = React.useCallback((value: boolean) => {
+    failRef.current = value
+    setFailNextState(value)
+  }, [])
 
   /** Runs a "server" mutation: latency, optional forced failure, then commit. */
   const run = React.useCallback(
@@ -215,7 +166,7 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
       setData(next)
       return result
     },
-    [setData],
+    [setData, setFailNext],
   )
 
   const assertOpen = (current: DemoData, date: string) => {
@@ -564,15 +515,14 @@ export function DemoProvider({ children }: { children: React.ReactNode }) {
   const resetDemo = React.useCallback(() => {
     const fresh = createSeed()
     dataRef.current = fresh
-    setMemory(null)
-    persist(null)
+    setData(fresh)
     setFailNext(false)
     setResetCount((n) => n + 1)
-  }, [])
+  }, [setFailNext])
 
   const value = React.useMemo<DemoContextValue>(
-    () => ({ data: effective, actions, failNext, setFailNext, resetDemo, resetCount }),
-    [effective, actions, failNext, resetDemo, resetCount],
+    () => ({ data, actions, failNext, setFailNext, resetDemo, resetCount }),
+    [data, actions, failNext, setFailNext, resetDemo, resetCount],
   )
 
   return <DemoContext.Provider value={value}>{children}</DemoContext.Provider>
