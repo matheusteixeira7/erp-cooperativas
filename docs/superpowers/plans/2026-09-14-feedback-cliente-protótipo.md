@@ -34,7 +34,7 @@
 **Interfaces:**
 - Produces: `type MaterialCondition = "loose" | "baled"`, `MATERIAL_CONDITION_LABEL`, `SaleItem.condition`, `MaterialType.defaultCondition`, `lastPricePerKg(data, { materialTypeId, condition, buyerId? , supplierId? }): { pricePerKg: number; on: string } | null`.
 
-- [ ] **Step 1: Tipos**
+- [x] **Step 1: Tipos**
 
 ```ts
 export type MaterialCondition = "loose" | "baled"
@@ -43,15 +43,15 @@ export type MaterialType = { id: string; name: string; category: MaterialCategor
 export type SaleItem = { id: string; materialTypeId: string; condition: MaterialCondition; weightKg: number; pricePerKg: number; subtotal: number }
 ```
 
-- [ ] **Step 2: Seed** — `defaultCondition: "baled"` em plásticos, papéis e alumínio; `"loose"` em ferro, cobre, vidro, rejeito. `buildSale` aceita `condition?` por item e cai no default do material.
+- [x] **Step 2: Seed** — `defaultCondition: "baled"` em plásticos, papéis e alumínio; `"loose"` em ferro, cobre, vidro, rejeito. `buildSale` aceita `condition?` por item e cai no default do material.
 
-- [ ] **Step 3: Teste falhando** para `lastPricePerKg` em `store.test.ts`: dado o seed, `lastPricePerKg(seed, { materialTypeId: "mt-papelao", condition: "baled", buyerId: "b1" })` devolve `{ pricePerKg: 0.65, on: "2026-08-08" }`; com `condition: "loose"` devolve `null`; venda com `deletedAt` é ignorada.
+- [x] **Step 3: Teste falhando** para `lastPricePerKg` em `store.test.ts`: dado o seed, `lastPricePerKg(seed, { materialTypeId: "mt-papelao", condition: "baled", buyerId: "b1" })` devolve `{ pricePerKg: 0.65, on: "2026-08-08" }`; com `condition: "loose"` devolve `null`; venda com `deletedAt` é ignorada.
 
-- [ ] **Step 4: Implementar** `lastPricePerKg` no store (função pura exportada, sem hook). Percorre `data.sales` (e `data.purchases` quando `supplierId`, adicionado na Task 2) ordenadas por data desc.
+- [x] **Step 4: Implementar** `lastPricePerKg` no store (função pura exportada, sem hook). Percorre `data.sales` (e `data.purchases` quando `supplierId`, adicionado na Task 2) ordenadas por data desc.
 
-- [ ] **Step 5: Tela de vendas** — `ToggleGroup` com dois `ToggleGroupItem` ("Solto", "Prensado") ao lado do select de material; ao trocar material, `setCondition(material.defaultCondition)`. Placeholder do preço = último preço formatado quando existir (`FieldDescription`: "Último preço com este comprador: R$ 0,65/kg"). Badge do estado na tabela de itens, na lista do mês e no diálogo de detalhe.
+- [x] **Step 5: Tela de vendas** — `ToggleGroup` com dois `ToggleGroupItem` ("Solto", "Prensado") ao lado do select de material; ao trocar material, `setCondition(material.defaultCondition)`. Placeholder do preço = último preço formatado quando existir (`FieldDescription`: "Último preço com este comprador: R$ 0,65/kg"). Badge do estado na tabela de itens, na lista do mês e no diálogo de detalhe.
 
-- [ ] **Step 6: typecheck + lint + test; commit** `feat(web): material condition (solto/prensado) on sale items`
+- [x] **Step 6: typecheck + lint + test; commit** `feat(web): material condition (solto/prensado) on sale items`
 
 ---
 
@@ -89,12 +89,12 @@ createPurchase(input: { supplierId; purchasedOn; items: PurchaseDraftItem[]; pay
 deletePurchase(id): Promise<void>
 ```
 
-- [ ] **Step 1: Teste falhando** em `payout.test.ts`: `input.purchases = [{ purchasedOn: "2026-08-03", totalAmount: 1500 }, { purchasedOn: "2026-08-10", totalAmount: 999, deletedAt: "x" }, { purchasedOn: "2026-09-01", totalAmount: 999 }]` → `totalPurchases 1500`, `surplus 34700`, `distributableSurplus 29495`.
-- [ ] **Step 2: Implementar** em `payout.ts` (`purchases` opcional com default `[]` para não quebrar chamadas antigas).
-- [ ] **Step 3: Tipos, erros, seed, store.** Seed: fornecedores `sup-ze` (individual, "Seu Zé (catador)", CPF 39053344705, PIX telefone) e `sup-coop-vizinha` (company, "Cooperativa Vizinha", CNPJ). Compras de setembro/2026: 02/09 Seu Zé papelão solto 800 kg × 0,30 (dinheiro, pago); 08/09 Cooperativa Vizinha PET cristal solto 500 kg × 1,80 (PIX, a pagar). Regras no store: `assertOpen(purchasedOn)`, itens ≥ 1 (ERR-PURCHASE-001), fornecedor e material existentes (ERR-PURCHASE-002), `deletePurchase` soft (ERR-PURCHASE-003).
-- [ ] **Step 4: `purchases-section.tsx`** — mesmo layout da venda em Card com `border-orange-300/60` e título "Nova compra"; combobox de fornecedor com "Novo fornecedor" (diálogo pergunta Pessoa/Empresa primeiro, depois nome, CPF ou CNPJ, PIX, telefone); itens com material + toggle Solto/Prensado (default do material) + peso + preço (placeholder último preço com esse fornecedor); radio Dinheiro/PIX; switch "Já pago" (paidOn = purchasedOn). Lista "Compras do mês" com badges dos materiais, forma de pagamento, "a pagar" quando `paidOn` nulo, botões Recibo (toast "PDF simulado", como o exportPdf do fechamento) e Excluir (manager, confirmação). Rodapé com resumo por fornecedor.
-- [ ] **Step 5: Fechamento** — card "Compras de material" entre Receita e Despesas; hint da Receita "Sobra: vendas − compras − despesas". `PayoutTotals.totalPurchases`. Mensagem NO_SURPLUS: "receita R$ X, compras R$ Y e despesas R$ Z". Home: sobra parcial = vendas − compras − despesas.
-- [ ] **Step 6: typecheck + lint + test; commit** `feat(web): material purchases from suppliers reduce monthly surplus`
+- [x] **Step 1: Teste falhando** em `payout.test.ts`: `input.purchases = [{ purchasedOn: "2026-08-03", totalAmount: 1500 }, { purchasedOn: "2026-08-10", totalAmount: 999, deletedAt: "x" }, { purchasedOn: "2026-09-01", totalAmount: 999 }]` → `totalPurchases 1500`, `surplus 34700`, `distributableSurplus 29495`.
+- [x] **Step 2: Implementar** em `payout.ts` (`purchases` opcional com default `[]` para não quebrar chamadas antigas).
+- [x] **Step 3: Tipos, erros, seed, store.** Seed: fornecedores `sup-ze` (individual, "Seu Zé (catador)", CPF 39053344705, PIX telefone) e `sup-coop-vizinha` (company, "Cooperativa Vizinha", CNPJ). Compras de setembro/2026: 02/09 Seu Zé papelão solto 800 kg × 0,30 (dinheiro, pago); 08/09 Cooperativa Vizinha PET cristal solto 500 kg × 1,80 (PIX, a pagar). Regras no store: `assertOpen(purchasedOn)`, itens ≥ 1 (ERR-PURCHASE-001), fornecedor e material existentes (ERR-PURCHASE-002), `deletePurchase` soft (ERR-PURCHASE-003).
+- [x] **Step 4: `purchases-section.tsx`** — mesmo layout da venda em Card com `border-orange-300/60` e título "Nova compra"; combobox de fornecedor com "Novo fornecedor" (diálogo pergunta Pessoa/Empresa primeiro, depois nome, CPF ou CNPJ, PIX, telefone); itens com material + toggle Solto/Prensado (default do material) + peso + preço (placeholder último preço com esse fornecedor); radio Dinheiro/PIX; switch "Já pago" (paidOn = purchasedOn). Lista "Compras do mês" com badges dos materiais, forma de pagamento, "a pagar" quando `paidOn` nulo, botões Recibo (toast "PDF simulado", como o exportPdf do fechamento) e Excluir (manager, confirmação). Rodapé com resumo por fornecedor.
+- [x] **Step 5: Fechamento** — card "Compras de material" entre Receita e Despesas; hint da Receita "Sobra: vendas − compras − despesas". `PayoutTotals.totalPurchases`. Mensagem NO_SURPLUS: "receita R$ X, compras R$ Y e despesas R$ Z". Home: sobra parcial = vendas − compras − despesas.
+- [x] **Step 6: typecheck + lint + test; commit** `feat(web): material purchases from suppliers reduce monthly surplus`
 
 ---
 
@@ -123,11 +123,11 @@ PayoutResult.inssTotal: number
 // RN-002: inss = withheld ? roundHalfEven(gross × rate) : 0; base = gross − inss; net = max(0, base − ded); carry = max(0, ded − base)
 ```
 
-- [ ] **Step 1: Teste falhando** (FX-ago-2026-com-inss): `settings.inssRate = 0.075`, m6 `inssWithheld: false` → Ana inss 352.57 net 4148.39; Roberto inss 336.55; Fernanda inss 0 net 4700.96; `inssTotal 1955.17`; `totalNet 27694.75`. Segundo teste (FX-out): Rita 2 dias, diária 328.40, vale 700 → net 0, carry 92.46.
-- [ ] **Step 2: Implementar** em `payout.ts`; warning "N cooperado(s) sem desconto de INSS: nomes" quando houver.
-- [ ] **Step 3: Tipos, seed, store, erros.** `saveSettings`: `inssRate < 0 || > 0.2` → ERR-SETTINGS-002. `closePayout` grava `inssTotal` e por item `memberCpfSnapshot`, `inssBase`, `inssRate`, `inssAmount`.
-- [ ] **Step 4: Telas.** Tabela: coluna "INSS" (`− R$`) entre Bruto e Vales, oculta quando `totals.inssTotal === 0 && settings.inssRate === 0`; badge "sem INSS" quando `inssRate === 0` no item e o rateio tem INSS. Card "INSS retido" com hint "7,5% sobre o bruto, antes dos vales". Detalhe: dropdown Exportar ganha "INSS do mês (CSV)" → colunas Cooperado;CPF;Base;Aliquota;INSS. Parâmetros: campo "INSS do cooperado" (%, min 0, max 20, step 0.5) com ajuda "Confirme a alíquota com o contador"; coluna INSS no histórico. Extrato: card "INSS retido" ou "Sem desconto de INSS". Cooperados: switch no formulário.
-- [ ] **Step 5: typecheck + lint + test; commit** `feat(web): INSS withheld from member gross before advances`
+- [x] **Step 1: Teste falhando** (FX-ago-2026-com-inss): `settings.inssRate = 0.075`, m6 `inssWithheld: false` → Ana inss 352.57 net 4148.39; Roberto inss 336.55; Fernanda inss 0 net 4700.96; `inssTotal 1955.17`; `totalNet 27694.75`. Segundo teste (FX-out): Rita 2 dias, diária 328.40, vale 700 → net 0, carry 92.46.
+- [x] **Step 2: Implementar** em `payout.ts`; warning "N cooperado(s) sem desconto de INSS: nomes" quando houver.
+- [x] **Step 3: Tipos, seed, store, erros.** `saveSettings`: `inssRate < 0 || > 0.2` → ERR-SETTINGS-002. `closePayout` grava `inssTotal` e por item `memberCpfSnapshot`, `inssBase`, `inssRate`, `inssAmount`.
+- [x] **Step 4: Telas.** Tabela: coluna "INSS" (`− R$`) entre Bruto e Vales, oculta quando `totals.inssTotal === 0 && settings.inssRate === 0`; badge "sem INSS" quando `inssRate === 0` no item e o rateio tem INSS. Card "INSS retido" com hint "7,5% sobre o bruto, antes dos vales". Detalhe: dropdown Exportar ganha "INSS do mês (CSV)" → colunas Cooperado;CPF;Base;Aliquota;INSS. Parâmetros: campo "INSS do cooperado" (%, min 0, max 20, step 0.5) com ajuda "Confirme a alíquota com o contador"; coluna INSS no histórico. Extrato: card "INSS retido" ou "Sem desconto de INSS". Cooperados: switch no formulário.
+- [x] **Step 5: typecheck + lint + test; commit** `feat(web): INSS withheld from member gross before advances`
 
 ---
 
@@ -146,15 +146,15 @@ reactivateMember(id): Promise<Member>   // ERR-MEMBER-002 | ERR-MEMBER-005 (não
 deleteMember(id): Promise<void>         // ERR-MEMBER-002 | ERR-MEMBER-004 (tem lançamentos)
 ```
 
-- [ ] **Step 1: Teste falhando** para `memberHasRecords`.
-- [ ] **Step 2: Implementar** selector e ações no store.
-- [ ] **Step 3: Tela.** `ToggleGroup` com "Ativos" / "Desligados" / "Todos". Menu: "Reativar" (só desligado, confirm "X volta à chamada a partir de hoje."), "Excluir de verdade" (só sem lançamentos; senão item desabilitado com texto "Tem lançamentos: use Desligar"). Toasts de sucesso.
-- [ ] **Step 4: typecheck + lint + test; commit** `feat(web): reactivate and hard-delete members without records`
+- [x] **Step 1: Teste falhando** para `memberHasRecords`.
+- [x] **Step 2: Implementar** selector e ações no store.
+- [x] **Step 3: Tela.** `ToggleGroup` com "Ativos" / "Desligados" / "Todos". Menu: "Reativar" (só desligado, confirm "X volta à chamada a partir de hoje."), "Excluir de verdade" (só sem lançamentos; senão item desabilitado com texto "Tem lançamentos: use Desligar"). Toasts de sucesso.
+- [x] **Step 4: typecheck + lint + test; commit** `feat(web): reactivate and hard-delete members without records`
 
 ---
 
 ### Task 5: Verificação final
 
-- [ ] `pnpm --filter web build` passa.
-- [ ] Smoke manual no browser: venda com estado, compra com fornecedor novo, fechamento de agosto mostrando compras e INSS, parâmetros com INSS, cooperado reativado.
-- [ ] Atualizar status na spec (TK-023..026 continuam `proposto`; o protótipo não é a implementação final).
+- [x] `pnpm --filter web build` passa.
+- [x] Smoke manual no browser: venda com estado, compra com fornecedor novo, fechamento de agosto mostrando compras e INSS, parâmetros com INSS, cooperado reativado.
+- [x] Atualizar status na spec (TK-023..026 continuam `proposto`; o protótipo não é a implementação final).
